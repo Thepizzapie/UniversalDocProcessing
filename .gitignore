@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+
+# Envs & secrets
+.env
+
+# DBs
+demo.db
+demo_web/
+
+# OS
+.DS_Store
+Thumbs.db
+
