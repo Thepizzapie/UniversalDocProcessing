@@ -1,0 +1,21 @@
+# Core framework dependencies (minimal)
+openai>=1.0.0
+fastapi>=0.110
+uvicorn[standard]>=0.22
+pillow>=11.3.0
+pypdf>=4.0.0
+python-dotenv>=1.0
+pydantic>=2
+
+# Optional for OCR fallback (can be removed if using GPT Vision only)
+pytesseract>=0.3.10
+pdf2image>=1.16
+
+# Demo web app only (can be removed for core framework)
+sqlmodel>=0.0.14
+jinja2>=3.1
+requests>=2.32.4
+
+# Legacy LangChain (should be removed eventually)
+langchain>=0.1.14
+langchain-openai>=0.1.0
