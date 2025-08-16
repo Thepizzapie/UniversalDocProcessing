@@ -1,7 +1,7 @@
 """Pytest configuration for the Document AI Framework tests."""
 
-import sys
 import os
+import sys
 from pathlib import Path
 
 # Add the project root to the Python path
