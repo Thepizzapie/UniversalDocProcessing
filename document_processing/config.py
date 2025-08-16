@@ -5,10 +5,10 @@ This module centralizes all environment variable handling and provides
 validation to ensure the framework is properly configured.
 """
 
-import os
 import logging
+import os
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict
 
 logger = logging.getLogger("doc_ai_config")
 
@@ -29,12 +29,16 @@ class Config:
         self.ocr_lang = os.environ.get("OCR_LANG", "eng")
         
         # API Security Configuration
-        self.allowed_tokens = {t.strip() for t in os.environ.get("ALLOWED_TOKENS", "").split(",") if t.strip()}
+        self.allowed_tokens = {
+            t.strip() for t in os.environ.get("ALLOWED_TOKENS", "").split(",") if t.strip()
+        }
         self.require_auth = bool(self.allowed_tokens)
         
         # Processing Limits
         self.max_file_size_mb = int(os.environ.get("MAX_FILE_SIZE_MB", "15"))
-        self.allow_file_urls = os.environ.get("ALLOW_FILE_URLS", "true").lower() in {"1", "true", "yes"}
+        self.allow_file_urls = os.environ.get("ALLOW_FILE_URLS", "true").lower() in {
+            "1", "true", "yes"
+        }
         self.max_concurrency = int(os.environ.get("MAX_CONCURRENCY", "4"))
         self.rate_limit_per_min = int(os.environ.get("RATE_LIMIT_PER_MIN", "60"))
         
@@ -63,9 +67,14 @@ class Config:
             warnings.append(f"POPPLER_PATH does not exist: {self.poppler_path}")
             
         # Model validation
-        supported_models = ["gpt-5", "gpt-4o", "gpt-4o-mini", "gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"]
+        supported_models = [
+            "gpt-5", "gpt-4o", "gpt-4o-mini", "gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"
+        ]
         if self.model_name not in supported_models:
-            warnings.append(f"MODEL_NAME '{self.model_name}' may not be supported. Supported: {supported_models}")
+            warnings.append(
+                f"MODEL_NAME '{self.model_name}' may not be supported. "
+                f"Supported: {supported_models}"
+            )
             
         return {
             "valid": len(errors) == 0,

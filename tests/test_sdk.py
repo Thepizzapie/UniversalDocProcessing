@@ -1,6 +1,3 @@
-import asyncio
-import types
-import httpx
 import pytest
 
 from sdk.client import DocAI

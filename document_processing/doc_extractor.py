@@ -21,22 +21,21 @@ Set the ``OPENAI_API_KEY`` environment variable before calling
 
 from __future__ import annotations
 
-import json
-import os
-import logging
-from pathlib import Path
 import base64
+import json
+import logging
+import os
+from pathlib import Path
 from typing import Optional, Union
 
-from .config import get_config
-
-from PIL import Image
 import pytesseract
-from pdf2image import convert_from_path
-
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from openai import OpenAI
-from langchain_core.prompts import ChatPromptTemplate
+from pdf2image import convert_from_path
+from PIL import Image
+
+from .config import get_config
 
 logger = logging.getLogger("doc_ai_extractor")
 

@@ -40,16 +40,16 @@ from typing import Optional
 from urllib.parse import urlparse
 
 import httpx
-from fastapi import FastAPI, File, Form, UploadFile, HTTPException, status, Request, Header, Depends
+from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile, status
 from fastapi.responses import JSONResponse
 
-from dotenv import load_dotenv
 # Load environment variables first
 load_dotenv()
 
-from document_processing.pipeline import run_pipeline
-from document_processing.doc_classifier import DocumentType
-from document_processing.config import get_config, validate_config
+from document_processing.config import get_config, validate_config  # noqa: E402
+from document_processing.doc_classifier import DocumentType  # noqa: E402
+from document_processing.pipeline import run_pipeline  # noqa: E402
 
 # Configure basic logging
 logger = logging.getLogger("doc_ai_service")

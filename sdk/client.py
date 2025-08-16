@@ -20,12 +20,12 @@ You may also specify ``file_url`` instead of ``file_path``.
 
 from __future__ import annotations
 
+import json
 import uuid
 from pathlib import Path
-from typing import Optional, Dict, Any
-import json
-import httpx
+from typing import Any, Dict, Optional
 
+import httpx
 import requests
 
 __all__ = ["DocAI"]

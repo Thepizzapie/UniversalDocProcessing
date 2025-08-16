@@ -25,24 +25,21 @@ directly into other Python code for programmatic use.
 
 from __future__ import annotations
 
-import tempfile
 import logging
+import tempfile
 from pathlib import Path
 from typing import Dict, Optional, Union
 
-from .config import validate_config
-from .doc_classifier import (
-    classify_document,
-    get_instructions_for_type,
-    DocumentType,
-    ClassificationResult,
-)
-from .doc_extractor import extract_fields_from_image
 from .agents import (
-    classify_with_agent,
-    extract_with_agent,
     refine_extraction_with_agent,
 )
+from .config import validate_config
+from .doc_classifier import (
+    ClassificationResult,
+    DocumentType,
+    get_instructions_for_type,
+)
+from .doc_extractor import extract_fields_from_image
 
 __all__ = ["run_pipeline"]
 

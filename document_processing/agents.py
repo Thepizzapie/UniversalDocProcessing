@@ -18,22 +18,25 @@ execution fails for any reason, ensuring robustness in production.
 from __future__ import annotations
 
 import json
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
 from langchain_openai import ChatOpenAI
+
 from .config import get_config
 
 try:
     # CrewAI is optional at runtime; code should still work without it
-    from crewai import Agent, Task, Crew
+    from crewai import Agent, Crew, Task
 
     _CREWAI_AVAILABLE = True
 except Exception:
     _CREWAI_AVAILABLE = False
 
 from .doc_classifier import (
-    DocumentType,
     ClassificationResult,
+    DocumentType,
+)
+from .doc_classifier import (
     classify_document as lc_classify_document,
 )
 from .doc_extractor import extract_fields as lc_extract_fields
@@ -65,7 +68,9 @@ def _default_llm(temperature: float = 1.0, max_tokens: int = 1024) -> ChatOpenAI
     return ChatOpenAI(**llm_params)
 
 
-def classify_with_agent(text: str, allowed_types: Optional[List[DocumentType]] = None) -> ClassificationResult:
+def classify_with_agent(
+    text: str, allowed_types: Optional[List[DocumentType]] = None
+) -> ClassificationResult:
     """Classify document text using a CrewAI agent, with fallback to LangChain.
 
     Args:
@@ -101,7 +106,7 @@ def classify_with_agent(text: str, allowed_types: Optional[List[DocumentType]] =
             "Allowed types: {allowed}.\n"
             "Document OCR text:\n{text}\n\n"
             "Respond with JSON only, using this schema: "
-            "{\"type\": <one of the allowed types>, \"confidence\": <float 0-1>}"
+            '{"type": "<one of the allowed types>", "confidence": <float 0-1>}'
         ).format(allowed=allowed_names, text=text),
         expected_output=(
             '{"type": "<type>", "confidence": <float>}'
@@ -120,7 +125,9 @@ def classify_with_agent(text: str, allowed_types: Optional[List[DocumentType]] =
         return lc_classify_document(text, allowed_types=allowed_types)
 
 
-def extract_with_agent(text: str, instructions: str, max_output_chars: int = 3000) -> Dict[str, Any]:
+def extract_with_agent(
+    text: str, instructions: str, max_output_chars: int = 3000
+) -> Dict[str, Any]:
     """Extract structured fields using a CrewAI agent, with fallback to LangChain.
 
     Args:

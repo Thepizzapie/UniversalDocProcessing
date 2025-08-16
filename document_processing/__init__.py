@@ -7,7 +7,7 @@ details.
 """
 
 from .doc_classifier import DocumentType, classify_document, get_instructions_for_type
-from .doc_extractor import ocr_document, extract_fields
+from .doc_extractor import extract_fields, ocr_document
 from .pipeline import run_pipeline
 
 __all__ = [

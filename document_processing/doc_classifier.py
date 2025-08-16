@@ -31,16 +31,15 @@ Dependencies:
 from __future__ import annotations
 
 import json
-import os
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Optional, List
+from typing import Dict, List, Optional
 
-from pydantic import BaseModel, Field
-from .config import get_config
-
-from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field
+
+from .config import get_config
 
 __all__ = [
     "DocumentType",
