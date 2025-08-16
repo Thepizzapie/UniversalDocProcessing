@@ -75,3 +75,17 @@ htmlcov/
 # Documentation builds
 docs/_build/
 
+# CI/CD and dev files clients don't need
+.github/
+requirements.minimal.txt
+setup.py
+setup.bat
+pyproject.toml
+tests/
+scripts/
+demo_web/
+CODE_OF_CONDUCT.md
+CONTRIBUTING.md
+LICENSE
+env.example
+
