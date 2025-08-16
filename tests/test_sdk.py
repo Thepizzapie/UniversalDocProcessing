@@ -12,4 +12,4 @@ def test_sync_client_requires_input():
 def test_async_client_requires_input():
     client = DocAI("http://localhost:8080")
     # Test that the async method exists
-    assert hasattr(client, 'classify_extract_async')
+    assert hasattr(client, "classify_extract_async")
