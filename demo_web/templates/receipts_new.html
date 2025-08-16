@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>New Receipt</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 24px; }
+      form > div { margin-bottom: 10px; }
+    </style>
+  </head>
+  <body>
+    <h1>New Receipt</h1>
+    <p><a href="/receipts">Back to list</a></p>
+    <form method="post">
+      <div>
+        <label>Transaction ID<br/><input name="transaction_id" required></label>
+      </div>
+      <div>
+        <label>Purchase Date<br/><input name="purchase_date" placeholder="YYYY-MM-DD" required></label>
+      </div>
+      <div>
+        <label>Merchant Name<br/><input name="merchant_name" required></label>
+      </div>
+      <div>
+        <label>Total Paid<br/><input type="number" step="0.01" name="total_paid" required></label>
+      </div>
+      <div>
+        <label>Payment Method<br/><input name="payment_method" required></label>
+      </div>
+      <div>
+        <label>Notes<br/><input name="notes"></label>
+      </div>
+      <button type="submit">Create</button>
+    </form>
+  </body>
+  </html>
+
+
+

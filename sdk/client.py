@@ -23,6 +23,8 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 from typing import Optional, Dict, Any
+import json
+import httpx
 
 import requests
 
@@ -107,5 +109,70 @@ class DocAI:
         # Close the file handle if opened
         if files:
             files["file"].close()
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as e:
+            try:
+                err_json = response.json()
+            except Exception:
+                err_json = {"detail": response.text}
+            raise requests.HTTPError(f"{e} - {json.dumps(err_json)}") from e
         return response.json()
+
+    async def classify_extract_async(
+        self,
+        file_path: Optional[str] = None,
+        file_url: Optional[str] = None,
+        callback_url: Optional[str] = None,
+        return_text: bool = False,
+        doc_type: Optional[str] = None,
+        use_agents: bool = True,
+        refine: bool = True,
+        ocr_fallback: bool = True,
+    ) -> Dict[str, Any]:
+        """Async variant of classify_extract using httpx.AsyncClient."""
+        if not file_path and not file_url:
+            raise ValueError("Either 'file_path' or 'file_url' must be provided")
+
+        url = f"{self.base_url}/classify-extract"
+        headers: Dict[str, str] = {"Idempotency-Key": str(uuid.uuid4())}
+        if self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
+
+        data: Dict[str, str] = {}
+        files: Dict[str, Any] = {}
+
+        if file_url:
+            data["file_url"] = file_url
+        if callback_url:
+            data["callback_url"] = callback_url
+        data["return_text"] = "true" if return_text else "false"
+        if doc_type:
+            data["doc_type"] = doc_type
+        data["use_agents"] = "true" if use_agents else "false"
+        data["refine"] = "true" if refine else "false"
+        data["ocr_fallback"] = "true" if ocr_fallback else "false"
+
+        file_handle = None
+        try:
+            if file_path:
+                path = Path(file_path)
+                if not path.exists():
+                    raise FileNotFoundError(file_path)
+                file_handle = open(path, "rb")
+                files = {"file": (path.name, file_handle, "application/octet-stream")}
+
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, headers=headers, data=data, files=files)
+                try:
+                    response.raise_for_status()
+                except httpx.HTTPStatusError as e:
+                    try:
+                        err_json = response.json()
+                    except Exception:
+                        err_json = {"detail": response.text}
+                    raise httpx.HTTPStatusError(f"{e} - {json.dumps(err_json)}", request=e.request, response=e.response)
+                return response.json()
+        finally:
+            if file_handle:
+                file_handle.close()

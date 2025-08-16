@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import Dict, Optional, List
 
 from pydantic import BaseModel, Field
+from .config import get_config
 
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
@@ -52,17 +53,12 @@ __all__ = [
 
 class DocumentType(str, Enum):
     """Enumeration of supported document types.  The member names must
-    match the keys defined in ``doc_types.yaml``.  If a document does not
-    match any known type with high confidence, the model may return
-    ``other``.
+    match the keys defined in ``doc_types.yaml``.
     """
 
     INVOICE = "invoice"
     RECEIPT = "receipt"
-    INSURANCE_CARD = "insurance_card"
-    W2 = "w2"
-    RESUME = "resume"
-    PURCHASE_ORDER = "purchase_order"
+    LOAD_SHEET = "load_sheet"
     OTHER = "other"
 
 
@@ -95,7 +91,7 @@ def load_doc_types(config_path: Optional[Path] = None) -> Dict[str, Dict[str, st
     import yaml  # local import to avoid requiring PyYAML globally
 
     if config_path is None:
-        config_path = Path(__file__).resolve().parent / "config" / "doc_types.yaml"
+        config_path = get_config().get_doc_types_path()
     with open(config_path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
@@ -111,7 +107,7 @@ def get_instructions_for_type(doc_type: DocumentType) -> str:
         the type is unknown the generic ``other`` instructions are returned.
     """
     config = load_doc_types()
-    entry = config.get(doc_type.value) or config.get(DocumentType.OTHER.value, {})
+    entry = config.get(doc_type.value) or {}
     return entry.get("instructions", "")
 
 
@@ -142,13 +138,14 @@ def classify_document(
     """
     # Initialize LLM if not provided
     if model is None:
+        config = get_config()
+        if not config.openai_api_key:
+            raise ValueError("OPENAI_API_KEY is not set; cannot perform classification")
         model = ChatOpenAI(
-            openai_api_key=os.environ.get("OPENAI_API_KEY"),
-            openai_api_base=os.environ.get(
-                "OPENAI_API_BASE_URL", "https://api.openai.com/v1"
-            ),
+            openai_api_key=config.openai_api_key,
+            openai_api_base=config.openai_api_base,
             temperature=0.1,
-            model_name=os.environ.get("MODEL_NAME", "gpt-4o-mini"),
+            model_name=config.model_name,
             max_tokens=256,
         )
 

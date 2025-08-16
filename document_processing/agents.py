@@ -18,10 +18,10 @@ execution fails for any reason, ensuring robustness in production.
 from __future__ import annotations
 
 import json
-import os
 from typing import List, Optional, Dict, Any
 
 from langchain_openai import ChatOpenAI
+from .config import get_config
 
 try:
     # CrewAI is optional at runtime; code should still work without it
@@ -45,14 +45,24 @@ __all__ = [
 ]
 
 
-def _default_llm(temperature: float = 0.0, max_tokens: int = 1024) -> ChatOpenAI:
-    return ChatOpenAI(
-        openai_api_key=os.environ.get("OPENAI_API_KEY"),
-        openai_api_base=os.environ.get("OPENAI_API_BASE_URL", "https://api.openai.com/v1"),
-        temperature=temperature,
-        model_name=os.environ.get("MODEL_NAME", "gpt-4o-mini"),
-        max_tokens=max_tokens,
-    )
+def _default_llm(temperature: float = 1.0, max_tokens: int = 1024) -> ChatOpenAI:
+    config = get_config()
+    # GPT-5 uses max_completion_tokens instead of max_tokens and doesn't support temperature=0.0
+    llm_params = {
+        "openai_api_key": config.openai_api_key,
+        "openai_api_base": config.openai_api_base,
+        "model_name": config.model_name,
+    }
+    
+    # Only add temperature for non-GPT-5 models
+    if config.model_name != "gpt-5":
+        llm_params["temperature"] = temperature
+        llm_params["max_tokens"] = max_tokens
+    else:
+        # GPT-5 specific parameters - skip temperature and use max_completion_tokens
+        llm_params["max_completion_tokens"] = max_tokens
+    
+    return ChatOpenAI(**llm_params)
 
 
 def classify_with_agent(text: str, allowed_types: Optional[List[DocumentType]] = None) -> ClassificationResult:
@@ -124,7 +134,7 @@ def extract_with_agent(text: str, instructions: str, max_output_chars: int = 300
     if not _CREWAI_AVAILABLE:
         return lc_extract_fields(text, instructions, max_output_chars=max_output_chars)
 
-    llm = _default_llm(temperature=0.0, max_tokens=2048)
+    llm = _default_llm(temperature=1.0, max_tokens=2048)
 
     extractor = Agent(
         role="Information Extraction Specialist",
@@ -184,7 +194,7 @@ def refine_extraction_with_agent(
         # Without CrewAI we simply return what we have
         return current_data
 
-    llm = _default_llm(temperature=0.0, max_tokens=2048)
+    llm = _default_llm(temperature=1.0, max_tokens=2048)
 
     refiner = Agent(
         role="Extraction Refiner",

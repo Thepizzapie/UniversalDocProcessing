@@ -1,91 +1,38 @@
 invoice:
   description: "Invoice document"
   instructions: |
-    Extract the following fields from the invoice:
-      - Invoice Number: Unique identifier for the invoice.
-      - Invoice Date: Date the invoice was issued.
-      - Due Date: Date payment is due.
-      - Vendor Name: Name of the company issuing the invoice.
-      - Vendor Address: Address of the vendor, including city and zip code.
-      - Customer Name: Name of the customer receiving the invoice.
-      - Customer Address: Address of the customer, including city and zip code.
-      - Total Amount Due: Total amount to be paid, including currency symbol.
-      - Line Items: A list of items or services billed, including description, quantity, unit price, and line total.
-    Respond using JSON with keys matching the field names (e.g., "Invoice Number", "Invoice Date", etc.).
+    Extract the following fields from the invoice and return as JSON:
+    {
+      "invoice_number": "Invoice number or ID",
+      "invoice_date": "Invoice date (MM/DD/YYYY format)", 
+      "vendor_name": "Company or person issuing the invoice",
+      "customer_name": "Customer or company being billed",
+      "total_amount": "Total amount due (number only, no currency symbol)",
+      "currency": "Currency symbol (e.g., USD, $)"
+    }
 
 receipt:
-  description: "Retail or service receipt"
+  description: "Retail or service receipt" 
   instructions: |
-    Extract the following information from the receipt:
-      - Receipt Number or Transaction ID (if available).
-      - Purchase Date.
-      - Merchant Name.
-      - Merchant Address.
-      - Itemized Purchases: List each purchased item with description, quantity, and price.
-      - Total Paid.
-      - Payment Method (cash, credit card, etc.) if present.
-    Return your response as a JSON object containing these fields.
+    Extract the following fields from the receipt and return as JSON:
+    {
+      "transaction_id": "Receipt number or transaction ID",
+      "purchase_date": "Date of purchase (MM/DD/YYYY format)",
+      "merchant_name": "Name of the store or business", 
+      "total_paid": "Total amount paid (number only, no currency symbol)",
+      "payment_method": "Payment method (cash, credit, debit, etc.)"
+    }
 
-insurance_card:
-  description: "Medical or auto insurance card"
+load_sheet:
+  description: "Shipping/freight load sheet"
   instructions: |
-    Extract these fields from the insurance card:
-      - Policy Holder Name.
-      - Policy Number.
-      - Group Number (if available).
-      - Insurance Company Name.
-      - Effective Date.
-      - Expiration Date.
-      - Contact Phone Number.
-    Format your response as a JSON object with the above fields.
-
-w2:
-  description: "IRS W‑2 wage and tax statement"
-  instructions: |
-    Extract the following fields from the W‑2 form:
-      - Employee’s Name.
-      - Employee’s Address.
-      - Employer’s Name.
-      - Employer’s Address.
-      - Employer Identification Number (EIN).
-      - Wages, Tips, Other Compensation (Box 1).
-      - Federal Income Tax Withheld (Box 2).
-      - Social Security Wages (Box 3).
-      - Social Security Tax Withheld (Box 4).
-      - Medicare Wages and Tips (Box 5).
-      - Medicare Tax Withheld (Box 6).
-      - State Wages, Tips, Etc. (Box 16).
-      - State Income Tax (Box 17).
-    Return your results as a JSON object with keys corresponding to the box labels (e.g., "Wages, Tips, Other Compensation").
-
-resume:
-  description: "Professional resume or CV"
-  instructions: |
-    Extract these items from the resume:
-      - Candidate Name.
-      - Contact Information (phone number, email address, and mailing address).
-      - Summary or Objective Statement.
-      - Education: List degrees, institutions, and graduation years.
-      - Work Experience: For each position include job title, company name, dates of employment, and bullet points summarizing responsibilities and achievements.
-      - Certifications or Licenses (if any).
-      - Skills: List of technical and soft skills.
-    Structure the output as a JSON object with keys: "Name", "Contact Information", "Summary", "Education", "Work Experience", "Certifications", and "Skills".
-
-purchase_order:
-  description: "Purchase order document"
-  instructions: |
-    Extract the following information from the purchase order:
-      - Purchase Order Number.
-      - Purchase Order Date.
-      - Buyer’s Name and Address.
-      - Seller’s Name and Address.
-      - List of Items Ordered: Each item should include description, quantity, unit price, and line total.
-      - Subtotal.
-      - Taxes.
-      - Total Amount.
-    Provide the extracted fields as a JSON object.
-
-other:
-  description: "Miscellaneous or unrecognized document"
-  instructions: |
-    The document type could not be confidently recognized. Extract any readable text using OCR and return the first 1000 characters of the text as a raw string in a JSON object with the key "raw_text".
+    Extract the following fields from the load sheet and return as JSON:
+    {
+      "load_number": "Load or shipment number",
+      "pickup_location": "Pickup address or location",
+      "dropoff_location": "Delivery address or location", 
+      "pickup_date": "Pickup date (MM/DD/YYYY format)",
+      "dropoff_date": "Delivery date (MM/DD/YYYY format)",
+      "carrier_name": "Shipping carrier or company name",
+      "total_weight_lbs": "Total weight in pounds (number only)"
+    }

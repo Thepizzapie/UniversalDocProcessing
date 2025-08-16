@@ -26,16 +26,18 @@ directly into other Python code for programmatic use.
 from __future__ import annotations
 
 import tempfile
+import logging
 from pathlib import Path
 from typing import Dict, Optional, Union
 
+from .config import validate_config
 from .doc_classifier import (
     classify_document,
     get_instructions_for_type,
     DocumentType,
     ClassificationResult,
 )
-from .doc_extractor import ocr_document, extract_fields
+from .doc_extractor import extract_fields_from_image
 from .agents import (
     classify_with_agent,
     extract_with_agent,
@@ -82,8 +84,13 @@ def run_pipeline(
             "data": the extracted fields (possibly empty).
             "raw_text": the OCR text if ``return_text`` is true.
     """
+    logger = logging.getLogger("doc_ai_pipeline")
     if not file and not file_path:
         raise ValueError("Either 'file' or 'file_path' must be provided")
+    
+    # Validate configuration before processing
+    if not validate_config():
+        logger.warning("Configuration validation failed, proceeding with warnings")
 
     # Write bytes to a temporary file if necessary
     if file is not None:
@@ -93,38 +100,65 @@ def run_pipeline(
     else:
         tmp_path = Path(file_path)
 
-    # Step 1: OCR to get text for classification
-    text = ocr_document(tmp_path)
+    # Step 1: Skip OCR, use GPT-5 Vision directly for images
+    logger.info("pipeline:starting step=vision_extraction")
+    text = ""  # Skip OCR entirely
+    logger.info("pipeline:finished step=vision_extraction chars=%s", len(text) if text else 0)
 
     # Step 2: Classify the document (unless forced)
     if forced_doc_type:
         try:
             forced_enum = DocumentType(forced_doc_type)
         except Exception:
-            forced_enum = DocumentType.OTHER
+            forced_enum = DocumentType.RECEIPT  # Default fallback
         classification: ClassificationResult = ClassificationResult(
             type=forced_enum, confidence=1.0
         )
     else:
-        if use_agents:
-            classification = classify_with_agent(text)
-        else:
-            classification = classify_document(text)
+        # Use GPT-5 Vision to classify the document type
+        try:
+            # Simple classification prompt
+            classify_prompt = f"Look at this document image and classify it as one of these types: {', '.join([t.value for t in DocumentType])}. Return only the exact type name."
+            classification_result = extract_fields_from_image(tmp_path, classify_prompt)
+            doc_type_str = list(classification_result.values())[0] if classification_result else "receipt"
+            
+            # Find matching document type
+            classified_type = DocumentType.RECEIPT  # default
+            for doc_type in DocumentType:
+                if doc_type.value.lower() in doc_type_str.lower():
+                    classified_type = doc_type
+                    break
+                    
+            classification = ClassificationResult(type=classified_type, confidence=0.9)
+            logger.info("pipeline: classified document as %s", classified_type.value)
+        except Exception as err:
+            logger.exception("pipeline: classification failed: %s", err)
+            classification = ClassificationResult(type=DocumentType.RECEIPT, confidence=0.5)
+    logger.info("pipeline:finished step=classify type=%s conf=%.3f", classification.type.value, classification.confidence)
 
     # Step 3: Retrieve extraction instructions
     instructions = get_instructions_for_type(classification.type)
 
-    # Step 4: Extract fields according to instructions
-    if use_agents:
-        data = extract_with_agent(text, instructions)
-    else:
-        data = extract_fields(text, instructions)
+    # Step 4: Extract fields using GPT-5 Vision directly
+    try:
+        # Always use vision-based extraction - don't rely on file extension for temp files
+        logger.info("pipeline: using GPT-5 vision extraction for file %s", tmp_path.name)
+        data = extract_fields_from_image(tmp_path, instructions)
+        logger.info("pipeline: vision extraction returned %d fields: %s", len(data), list(data.keys()) if data else "none")
+    except Exception as err:
+        logger.exception("pipeline: extraction failed: %s", err)
+        data = {}
+    logger.info("pipeline:finished step=extract has_data=%s", bool(data))
 
     # Optional refinement pass
     if run_refine_pass and use_agents and data:
-        refined = refine_extraction_with_agent(text, data, instructions)
-        if isinstance(refined, dict) and refined:
-            data = refined
+        try:
+            refined = refine_extraction_with_agent(text, data, instructions)
+            if isinstance(refined, dict) and refined:
+                data = refined
+            logger.info("pipeline:finished step=refine improved=%s", bool(refined))
+        except Exception as err:
+            logger.exception("pipeline: refinement failed: %s", err)
 
     # OCR fallback if extraction failed
     if ocr_fallback and (not isinstance(data, dict) or not data):

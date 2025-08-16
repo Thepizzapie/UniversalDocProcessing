@@ -23,7 +23,7 @@ EXPOSE 8080
 # Environment defaults for OCR/LLM providers
 ENV OCR_PROVIDER=tesseract \
     LLM_PROVIDER=openai \
-    MODEL_NAME=gpt-4o-mini
+    MODEL_NAME=gpt-5
 
 # Launch the application
 CMD ["uvicorn", "service.api:app", "--host", "0.0.0.0", "--port", "8080"]
