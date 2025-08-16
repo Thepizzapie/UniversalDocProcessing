@@ -83,7 +83,13 @@ def upload_invoice(
     """Upload an invoice image/PDF, send to the document API, and save to DB."""
     base_url = os.environ.get("DOC_API_BASE_URL", "http://127.0.0.1:8080")
 
-    files = {"file": (file.filename or "upload", file.file, file.content_type or "application/octet-stream")}
+    files = {
+        "file": (
+            file.filename or "upload",
+            file.file,
+            file.content_type or "application/octet-stream",
+        )
+    }
     data = {
         # Force 'invoice' type for proper field mapping
         "doc_type": "invoice",
@@ -107,57 +113,91 @@ def upload_invoice(
         resp.raise_for_status()
     except Exception as err:
         from fastapi.responses import HTMLResponse
+
         msg = (
             f"Upload failed contacting Document API at {base_url}. "
             f"Error: {err}. Ensure the API is running (python -m uvicorn service.api:app --port 8080) "
             f"or set DOC_API_BASE_URL."
         )
-        return HTMLResponse(f"<p>{msg}</p><p><a href='/invoices/upload'>Back</a></p>", status_code=502)
+        return HTMLResponse(
+            f"<p>{msg}</p><p><a href='/invoices/upload'>Back</a></p>", status_code=502
+        )
     payload = resp.json()
     extracted = payload.get("data") or {}
 
     # Map extracted fields to invoice database fields
-    invoice_number = _pick_first(extracted, [
-        "Invoice Number",
-        "invoice_number",
-        "Invoice ID", 
-        "Number",
-    ]) or ""
+    invoice_number = (
+        _pick_first(
+            extracted,
+            [
+                "Invoice Number",
+                "invoice_number",
+                "Invoice ID",
+                "Number",
+            ],
+        )
+        or ""
+    )
 
-    invoice_date = _pick_first(extracted, [
-        "Invoice Date",
-        "invoice_date",
-        "Date",
-        "Issue Date",
-    ]) or ""
+    invoice_date = (
+        _pick_first(
+            extracted,
+            [
+                "Invoice Date",
+                "invoice_date",
+                "Date",
+                "Issue Date",
+            ],
+        )
+        or ""
+    )
 
-    vendor_name = _pick_first(extracted, [
-        "Vendor Name",
-        "vendor_name",
-        "Vendor",
-        "Company",
-        "From",
-    ]) or ""
+    vendor_name = (
+        _pick_first(
+            extracted,
+            [
+                "Vendor Name",
+                "vendor_name",
+                "Vendor",
+                "Company",
+                "From",
+            ],
+        )
+        or ""
+    )
 
-    customer_name = _pick_first(extracted, [
-        "Customer Name", 
-        "customer_name",
-        "Customer",
-        "Bill To",
-        "To",
-    ]) or ""
+    customer_name = (
+        _pick_first(
+            extracted,
+            [
+                "Customer Name",
+                "customer_name",
+                "Customer",
+                "Bill To",
+                "To",
+            ],
+        )
+        or ""
+    )
 
     # Extract total amount and currency
-    total_amount_str = _pick_first(extracted, [
-        "Total Amount Due",
-        "total_amount",
-        "Total",
-        "Amount Due",
-        "Grand Total",
-    ]) or ""
-    
+    total_amount_str = (
+        _pick_first(
+            extracted,
+            [
+                "Total Amount Due",
+                "total_amount",
+                "Total",
+                "Amount Due",
+                "Grand Total",
+            ],
+        )
+        or ""
+    )
+
     # Extract numeric amount if the field includes currency symbols
     import re as _re
+
     amount_match = _re.search(r"[-+]?[0-9]*\.?[0-9]+", str(total_amount_str))
     total_amount = float(amount_match.group(0)) if amount_match else 0.0
 
@@ -238,7 +278,13 @@ def upload_receipt(
     """Upload a receipt image/PDF, send to the document API, and save to DB."""
     base_url = os.environ.get("DOC_API_BASE_URL", "http://127.0.0.1:8080")
 
-    files = {"file": (file.filename or "upload", file.file, file.content_type or "application/octet-stream")}
+    files = {
+        "file": (
+            file.filename or "upload",
+            file.file,
+            file.content_type or "application/octet-stream",
+        )
+    }
     data = {
         # Prefer forcing 'receipt' to keep mapping predictable
         "doc_type": "receipt",
@@ -262,52 +308,86 @@ def upload_receipt(
         resp.raise_for_status()
     except Exception as err:
         from fastapi.responses import HTMLResponse
+
         msg = (
             f"Upload failed contacting Document API at {base_url}. "
             f"Error: {err}. Ensure the API is running (python -m uvicorn service.api:app --port 8080) "
             f"or set DOC_API_BASE_URL."
         )
-        return HTMLResponse(f"<p>{msg}</p><p><a href='/receipts/upload'>Back</a></p>", status_code=502)
+        return HTMLResponse(
+            f"<p>{msg}</p><p><a href='/receipts/upload'>Back</a></p>", status_code=502
+        )
     payload = resp.json()
     extracted = payload.get("data") or {}
 
-    transaction_id = _pick_first(extracted, [
-        "Receipt Number or Transaction ID",
-        "Transaction ID",
-        "Receipt Number",
-        "receipt_number",
-        "transaction_id",
-    ]) or ""
+    transaction_id = (
+        _pick_first(
+            extracted,
+            [
+                "Receipt Number or Transaction ID",
+                "Transaction ID",
+                "Receipt Number",
+                "receipt_number",
+                "transaction_id",
+            ],
+        )
+        or ""
+    )
 
-    purchase_date = _pick_first(extracted, [
-        "Purchase Date",
-        "Date",
-        "purchase_date",
-        "date",
-    ]) or ""
+    purchase_date = (
+        _pick_first(
+            extracted,
+            [
+                "Purchase Date",
+                "Date",
+                "purchase_date",
+                "date",
+            ],
+        )
+        or ""
+    )
 
-    merchant_name = _pick_first(extracted, [
-        "Merchant Name",
-        "merchant_name",
-        "Merchant",
-        "Store",
-    ]) or ""
+    merchant_name = (
+        _pick_first(
+            extracted,
+            [
+                "Merchant Name",
+                "merchant_name",
+                "Merchant",
+                "Store",
+            ],
+        )
+        or ""
+    )
 
-    total_paid_str = _pick_first(extracted, [
-        "Total Paid",
-        "Total Amount",
-        "Total",
-        "total_paid",
-    ]) or ""
+    total_paid_str = (
+        _pick_first(
+            extracted,
+            [
+                "Total Paid",
+                "Total Amount",
+                "Total",
+                "total_paid",
+            ],
+        )
+        or ""
+    )
     # Extract numeric amount if the field includes currency symbols
     import re as _re
+
     m = _re.search(r"[-+]?[0-9]*\.?[0-9]+", str(total_paid_str))
     total_paid = float(m.group(0)) if m else 0.0
 
-    payment_method = _pick_first(extracted, [
-        "Payment Method",
-        "payment_method",
-    ]) or "Unknown"
+    payment_method = (
+        _pick_first(
+            extracted,
+            [
+                "Payment Method",
+                "payment_method",
+            ],
+        )
+        or "Unknown"
+    )
 
     notes_parts: list[str] = []
     for key in [
@@ -373,6 +453,3 @@ def create_load_sheet(
 
 
 app.include_router(router)
-
-
-

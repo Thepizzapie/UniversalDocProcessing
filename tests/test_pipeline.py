@@ -7,4 +7,3 @@ def test_pipeline_requires_input():
         assert False, "Expected ValueError"
     except ValueError:
         pass
-

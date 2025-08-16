@@ -84,7 +84,7 @@ def run_pipeline(
     logger = logging.getLogger("doc_ai_pipeline")
     if not file and not file_path:
         raise ValueError("Either 'file' or 'file_path' must be provided")
-    
+
     # Validate configuration before processing
     if not validate_config():
         logger.warning("Configuration validation failed, proceeding with warnings")
@@ -115,7 +115,7 @@ def run_pipeline(
         # Use GPT-5 Vision to classify the document type
         try:
             # Simple classification prompt
-            document_types = ', '.join([t.value for t in DocumentType])
+            document_types = ", ".join([t.value for t in DocumentType])
             classify_prompt = (
                 f"Look at this document image and classify it as one of these types: "
                 f"{document_types}. Return only the exact type name."
@@ -124,22 +124,23 @@ def run_pipeline(
             doc_type_str = (
                 list(classification_result.values())[0] if classification_result else "receipt"
             )
-            
+
             # Find matching document type
             classified_type = DocumentType.RECEIPT  # default
             for doc_type in DocumentType:
                 if doc_type.value.lower() in doc_type_str.lower():
                     classified_type = doc_type
                     break
-                    
+
             classification = ClassificationResult(type=classified_type, confidence=0.9)
             logger.info("pipeline: classified document as %s", classified_type.value)
         except Exception as err:
             logger.exception("pipeline: classification failed: %s", err)
             classification = ClassificationResult(type=DocumentType.RECEIPT, confidence=0.5)
     logger.info(
-        "pipeline:finished step=classify type=%s conf=%.3f", 
-        classification.type.value, classification.confidence
+        "pipeline:finished step=classify type=%s conf=%.3f",
+        classification.type.value,
+        classification.confidence,
     )
 
     # Step 3: Retrieve extraction instructions
@@ -151,8 +152,9 @@ def run_pipeline(
         logger.info("pipeline: using GPT-5 vision extraction for file %s", tmp_path.name)
         data = extract_fields_from_image(tmp_path, instructions)
         logger.info(
-            "pipeline: vision extraction returned %d fields: %s", 
-            len(data), list(data.keys()) if data else "none"
+            "pipeline: vision extraction returned %d fields: %s",
+            len(data),
+            list(data.keys()) if data else "none",
         )
     except Exception as err:
         logger.exception("pipeline: extraction failed: %s", err)

@@ -56,7 +56,7 @@ def _default_llm(temperature: float = 1.0, max_tokens: int = 1024) -> ChatOpenAI
         "openai_api_base": config.openai_api_base,
         "model_name": config.model_name,
     }
-    
+
     # Only add temperature for non-GPT-5 models
     if config.model_name != "gpt-5":
         llm_params["temperature"] = temperature
@@ -64,7 +64,7 @@ def _default_llm(temperature: float = 1.0, max_tokens: int = 1024) -> ChatOpenAI
     else:
         # GPT-5 specific parameters - skip temperature and use max_completion_tokens
         llm_params["max_completion_tokens"] = max_tokens
-    
+
     return ChatOpenAI(**llm_params)
 
 
@@ -108,9 +108,7 @@ def classify_with_agent(
             "Respond with JSON only, using this schema: "
             '{"type": "<one of the allowed types>", "confidence": <float 0-1>}'
         ),
-        expected_output=(
-            '{"type": "<type>", "confidence": <float>}'
-        ),
+        expected_output=('{"type": "<type>", "confidence": <float>}'),
         agent=classifier,
     )
 
@@ -155,7 +153,7 @@ def extract_with_agent(
         verbose=False,
     )
 
-    truncated_text = text[: max_output_chars]
+    truncated_text = text[:max_output_chars]
 
     task = Task(
         description=(
@@ -218,7 +216,7 @@ def refine_extraction_with_agent(
         verbose=False,
     )
 
-    truncated_text = text[: max_output_chars]
+    truncated_text = text[:max_output_chars]
 
     task = Task(
         description=(
@@ -237,5 +235,3 @@ def refine_extraction_with_agent(
         return json.loads(content)
     except Exception:
         return current_data
-
-

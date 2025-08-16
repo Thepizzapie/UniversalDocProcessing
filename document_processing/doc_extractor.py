@@ -85,7 +85,9 @@ def ocr_document(document_path: Union[str, Path]) -> str:
                 except Exception as img_error:
                     logger.exception(
                         "Both PDF and image OCR failed for %s: PDF error: %s, Image error: %s",
-                        path, pdf_error, img_error
+                        path,
+                        pdf_error,
+                        img_error,
                     )
                     return ""
         else:
@@ -100,7 +102,7 @@ def ocr_document(document_path: Union[str, Path]) -> str:
         # In case of any unexpected OCR error, log and return empty string
         logger.exception("Unexpected OCR error for %s: %s", path, e)
         return ""
-    
+
     result = text.strip()
     logger.info("OCR completed for %s: extracted %d characters", path.name, len(result))
     return result
@@ -162,7 +164,7 @@ def extract_fields(
     )
     formatted_prompt = prompt.format(
         instructions=instructions,
-        text=text[: max_output_chars],
+        text=text[:max_output_chars],
     )
     raw_response = model.invoke(formatted_prompt)
     try:
@@ -188,7 +190,7 @@ def extract_fields_from_image(
     path = Path(image_path)
     if not path.exists():
         return {}
-    
+
     # For temp files, try to process regardless of extension
     # For regular files, check extension
     suffix = path.suffix.lower()
@@ -222,16 +224,16 @@ def extract_fields_from_image(
                 {
                     "role": "user",
                     "content": [
-                                                    {
-                                "type": "text", 
-                                "text": (
-                                    "Look at this document image carefully. Extract the following "
-                                    f"data and return ONLY a JSON object:\n\n"
-                                    f"{instructions[:max_output_chars]}\n\n"
-                                    "IMPORTANT: Always return a JSON object, even if you can only "
-                                    "extract partial information. Do not return empty objects."
-                                )
-                            },
+                        {
+                            "type": "text",
+                            "text": (
+                                "Look at this document image carefully. Extract the following "
+                                f"data and return ONLY a JSON object:\n\n"
+                                f"{instructions[:max_output_chars]}\n\n"
+                                "IMPORTANT: Always return a JSON object, even if you can only "
+                                "extract partial information. Do not return empty objects."
+                            ),
+                        },
                         {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
                     ],
                 },
@@ -241,10 +243,9 @@ def extract_fields_from_image(
         )
         content = resp.choices[0].message.content or "{}"
         logger.info(
-            "GPT-4o Vision response: %s", 
-            content[:200] + "..." if len(content) > 200 else content
+            "GPT-4o Vision response: %s", content[:200] + "..." if len(content) > 200 else content
         )
-        
+
         try:
             parsed = json.loads(content)
             if parsed:  # If we got data, return it
@@ -257,18 +258,18 @@ def extract_fields_from_image(
         except Exception as parse_error:
             logger.warning("Failed to parse JSON response: %s", parse_error)
             # Attempt to strip code fences if present
-            cleaned = content.strip().strip('`').strip('json').strip('`')
+            cleaned = content.strip().strip("`").strip("json").strip("`")
             try:
                 parsed = json.loads(cleaned)
                 if parsed:
                     logger.info(
-                        "Successfully parsed cleaned vision extraction result with %d fields", 
-                        len(parsed)
+                        "Successfully parsed cleaned vision extraction result with %d fields",
+                        len(parsed),
                     )
                     return parsed
             except Exception:
                 logger.error("Failed to parse even cleaned JSON response: %s", cleaned[:100])
-        
+
         # No fallback - if it doesn't work, it doesn't work
         logger.error("Vision extraction completely failed - GPT-5 returned empty or invalid JSON")
         return {}

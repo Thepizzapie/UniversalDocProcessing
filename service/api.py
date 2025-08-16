@@ -118,13 +118,12 @@ def _validate_external_url(value: str, field_name: str) -> None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid {field_name}")
     if parsed.scheme not in {"http", "https"}:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, 
-            detail=f"{field_name} must use http/https"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"{field_name} must use http/https"
         )
     if not parsed.hostname or _is_private_ip_addr(parsed.hostname):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, 
-            detail=f"{field_name} points to a private or invalid host"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{field_name} points to a private or invalid host",
         )
 
 
@@ -239,8 +238,7 @@ async def classify_extract(
     """
     if file is None and not file_url:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, 
-            detail="file or file_url must be provided"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="file or file_url must be provided"
         )
 
     # Validate optional flags
@@ -298,8 +296,8 @@ async def classify_extract(
             )
         if file_bytes and len(file_bytes) > config.max_file_size_mb * 1024 * 1024:
             raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, 
-                detail="Downloaded file too large"
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="Downloaded file too large",
             )
     elif file is not None:
         file_bytes = await file.read()
@@ -322,7 +320,10 @@ async def classify_extract(
         duration_ms = int((_now() - start) * 1000)
         logger.info(
             "processed document: use_agents=%s refine=%s bytes=%s duration_ms=%s",
-            bool(use_agents), bool(refine), len(file_bytes) if file_bytes else None, duration_ms,
+            bool(use_agents),
+            bool(refine),
+            len(file_bytes) if file_bytes else None,
+            duration_ms,
         )
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

@@ -12,7 +12,10 @@ def test_missing_inputs_returns_400():
 
 
 def test_invalid_doc_type_returns_400():
-    resp = client.post("/classify-extract", data={"doc_type": "not_a_type", "file_url": "https://example.com/doc.pdf"})
+    resp = client.post(
+        "/classify-extract",
+        data={"doc_type": "not_a_type", "file_url": "https://example.com/doc.pdf"},
+    )
     # Will likely fail at URL fetch but doc_type should be validated first when file_url is present
     # If fetch happens first and fails, accept either 400 detail
     assert resp.status_code == 400
@@ -45,11 +48,7 @@ def test_async_queues_202_with_callback(monkeypatch):
     monkeypatch.setattr(api_module, "_process_and_callback", fake_background)
     resp = client.post(
         "/classify-extract",
-        data={
-            "file_url": "https://example.com/a.pdf",
-            "callback_url": "https://example.com/cb"
-        }
+        data={"file_url": "https://example.com/a.pdf", "callback_url": "https://example.com/cb"},
     )
     assert resp.status_code == 202
     assert resp.json()["status"] == "queued"
-

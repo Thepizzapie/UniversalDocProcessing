@@ -22,8 +22,7 @@ sys.path.insert(0, str(project_root))
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("doc_ai_main")
 
@@ -33,43 +32,37 @@ def main():
     try:
         # Import after setting up the path
         from document_processing.config import validate_config
-        
+
         # Validate configuration
         logger.info("Starting Document AI Service...")
         logger.info("Validating configuration...")
-        
+
         if not validate_config():
             logger.error(
                 "Configuration validation failed. Please check your environment variables."
             )
             sys.exit(1)
-            
+
         logger.info("Configuration validation passed.")
-        
+
         # Check if we should run the API service or demo web app
         service_type = os.environ.get("SERVICE_TYPE", "api").lower()
-        
+
         if service_type == "demo":
             logger.info("Starting demo web application...")
             import uvicorn
+
             uvicorn.run(
-                "demo_web.main:app",
-                host="127.0.0.1",
-                port=8090,
-                reload=False,
-                log_level="info"
+                "demo_web.main:app", host="127.0.0.1", port=8090, reload=False, log_level="info"
             )
         else:
             logger.info("Starting document processing API...")
             import uvicorn
+
             uvicorn.run(
-                "service.api:app",
-                host="127.0.0.1",
-                port=8080,
-                reload=False,
-                log_level="info"
+                "service.api:app", host="127.0.0.1", port=8080, reload=False, log_level="info"
             )
-            
+
     except KeyboardInterrupt:
         logger.info("Service stopped by user.")
     except Exception as e:

@@ -50,7 +50,3 @@ def get_session(engine=None) -> Session:
     if engine is None:
         engine = get_engine()
     return Session(engine)
-
-
-
-

@@ -67,12 +67,8 @@ class ClassificationResult(BaseModel):
     floating‑point measure of the model’s confidence (0–1).
     """
 
-    type: DocumentType = Field(
-        ..., description="Predicted document type from the known list"
-    )
-    confidence: float = Field(
-        ..., description="Confidence score between 0 and 1"
-    )
+    type: DocumentType = Field(..., description="Predicted document type from the known list")
+    confidence: float = Field(..., description="Confidence score between 0 and 1")
 
 
 def load_doc_types(config_path: Optional[Path] = None) -> Dict[str, Dict[str, str]]:

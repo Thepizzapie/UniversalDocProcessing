@@ -38,14 +38,14 @@ def install_dependencies():
 def setup_environment():
     """Set up environment configuration."""
     print("\n⚙️  Setting up environment configuration...")
-    
+
     env_file = Path(".env")
     env_example = Path("env.example")
-    
+
     if env_file.exists():
         print("✅ .env file already exists")
         return
-        
+
     if env_example.exists():
         shutil.copy(env_example, env_file)
         print("✅ Created .env from template")
@@ -64,44 +64,45 @@ def setup_environment():
 def validate_installation():
     """Validate that the framework is properly installed."""
     print("\n🔍 Validating installation...")
-    
+
     try:
         # Test import
         sys.path.insert(0, str(Path.cwd()))
         from document_processing.config import get_config
+
         get_config()  # Test that config can be loaded
         print("✅ Framework modules import successfully")
-        
+
         # Check for required dependencies
         missing = []
         try:
             # Test package availability using importlib
             import importlib.util
-            
-            packages = ['fastapi', 'langchain_openai', 'pdf2image', 'pytesseract', 'uvicorn']
+
+            packages = ["fastapi", "langchain_openai", "pdf2image", "pytesseract", "uvicorn"]
             for pkg in packages:
                 if importlib.util.find_spec(pkg) is None:
                     missing.append(pkg)
-            
+
             if not missing:
                 print("✅ All required packages are available")
         except ImportError as e:
             missing.append(str(e))
-            
+
         if missing:
             print("⚠️  Some optional dependencies are missing:")
             for m in missing:
                 print(f"   - {m}")
-                
+
         # Check OCR tools
         if shutil.which("tesseract"):
             print("✅ Tesseract OCR is available")
         else:
             print("⚠️  Tesseract OCR not found in PATH")
             print("   For full functionality, install Tesseract or use Docker")
-            
+
         print("\n🎉 Installation validation completed!")
-        
+
     except Exception as e:
         print(f"❌ Validation failed: {e}")
         sys.exit(1)
@@ -109,9 +110,9 @@ def validate_installation():
 
 def print_next_steps():
     """Print next steps for the user."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("🚀 NEXT STEPS")
-    print("="*60)
+    print("=" * 60)
     print()
     print("1. Edit .env file and add your OpenAI API key:")
     print("   OPENAI_API_KEY=sk-your-actual-key-here")
@@ -127,14 +128,14 @@ def print_next_steps():
     print("   docker run -p 8080:8080 -e OPENAI_API_KEY=your-key doc-ai")
     print()
     print("📚 For more information, see README.md")
-    print("="*60)
+    print("=" * 60)
 
 
 def main():
     """Main setup function."""
     print("🔧 Document AI Framework Setup")
-    print("="*40)
-    
+    print("=" * 40)
+
     check_python_version()
     install_dependencies()
     setup_environment()
