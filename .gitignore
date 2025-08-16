@@ -1,5 +1,29 @@
 # Python
 __pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Coverage
+.coverage*
+coverage.xml
+htmlcov/
+
+# IDE/editor
+.vscode/
+.idea/
+
+# OS
+*.DS_Store
+Thumbs.db
+# Python
+__pycache__/
 *.py[cod]
 *$py.class
 *.so
@@ -66,12 +90,31 @@ Thumbs.db
 *.temp
 temp/
 
-# Testing
+# Testing artifacts (keep tests/ directory)
 .coverage
 .pytest_cache/
 htmlcov/
 .tox/
 
-# Documentation builds
+# Demo web app - not part of core framework
+demo_web/
+
+# Developer utilities not needed by client
+scripts/
+sdk/
+requirements.minimal.txt
+setup.py
+setup.bat
+
 docs/_build/
+
+# Keep JSON config tracked; ignore legacy YAML (already removed)
+document_processing/config/doc_types.yaml
+
+# Ensure docs are tracked (do not ignore)
+!README.md
+!CODE_OF_CONDUCT.md
+!CONTRIBUTING.md
+!LICENSE
+!pyproject.toml
 
