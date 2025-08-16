@@ -1,19 +1,25 @@
+# Core document processing framework
+openai>=1.0.0
+pillow>=11.3.0
+pypdf>=4.0.0
+python-dotenv>=1.0
+pydantic>=2
+PyYAML>=6.0.1
+
+# API service
 fastapi>=0.110
 uvicorn[standard]>=0.22
-pydantic>=2
-langchain>=0.1.14
-langchain-openai>=0.1.0
-pydantic-settings>=2.2
-PyYAML>=6.0.1
-pytesseract>=0.3.10
-pillow>=11.3.0
-pdf2image>=1.16
-pypdf>=4.0.0
 httpx>=0.25
-urllib3>=2.5.0
-requests>=2.32.4
-python-dotenv>=1.0
-crewai>=0.1.10
+
+# Demo web app (optional)
 sqlmodel>=0.0.14
 jinja2>=3.1
-openai>=1.0.0
+requests>=2.32.4
+
+# OCR fallback (optional - using GPT Vision instead)
+# pytesseract>=0.3.10
+# pdf2image>=1.16
+
+# Legacy dependencies (to be removed)
+langchain>=0.1.14
+langchain-openai>=0.1.0
