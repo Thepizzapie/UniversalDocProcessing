@@ -9,10 +9,9 @@ This script helps users get started quickly by:
 4. Validating the installation
 """
 
-import os
-import sys
-import subprocess
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -70,18 +69,22 @@ def validate_installation():
         # Test import
         sys.path.insert(0, str(Path.cwd()))
         from document_processing.config import get_config
-        config = get_config()
+        get_config()  # Test that config can be loaded
         print("✅ Framework modules import successfully")
         
         # Check for required dependencies
         missing = []
         try:
-            import fastapi
-            import uvicorn
-            import langchain_openai
-            import pytesseract
-            import pdf2image
-            print("✅ All required packages are available")
+            # Test package availability using importlib
+            import importlib.util
+            
+            packages = ['fastapi', 'langchain_openai', 'pdf2image', 'pytesseract', 'uvicorn']
+            for pkg in packages:
+                if importlib.util.find_spec(pkg) is None:
+                    missing.append(pkg)
+            
+            if not missing:
+                print("✅ All required packages are available")
         except ImportError as e:
             missing.append(str(e))
             

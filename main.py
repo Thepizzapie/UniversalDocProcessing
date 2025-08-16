@@ -6,10 +6,11 @@ This script provides a simple way to start the service with proper configuration
 validation and error handling.
 """
 
-import sys
-import os
 import logging
+import os
+import sys
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -38,7 +39,9 @@ def main():
         logger.info("Validating configuration...")
         
         if not validate_config():
-            logger.error("Configuration validation failed. Please check your environment variables.")
+            logger.error(
+                "Configuration validation failed. Please check your environment variables."
+            )
             sys.exit(1)
             
         logger.info("Configuration validation passed.")
