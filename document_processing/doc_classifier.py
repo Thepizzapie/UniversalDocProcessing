@@ -156,7 +156,8 @@ def classify_document(
     # Compose prompt using a template
     prompt = ChatPromptTemplate.from_template(
         """
-        You are a document classification expert. Choose the most appropriate document type from the following list:
+        You are a document classification expert. Choose the most appropriate document type 
+        from the following list:
         {allowed_list}
 
         Document text:

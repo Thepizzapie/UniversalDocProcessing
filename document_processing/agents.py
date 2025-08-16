@@ -103,11 +103,11 @@ def classify_with_agent(
 
     task = Task(
         description=(
-            "Allowed types: {allowed}.\n"
-            "Document OCR text:\n{text}\n\n"
+            f"Allowed types: {allowed_names}.\n"
+            f"Document OCR text:\n{text}\n\n"
             "Respond with JSON only, using this schema: "
             '{"type": "<one of the allowed types>", "confidence": <float 0-1>}'
-        ).format(allowed=allowed_names, text=text),
+        ),
         expected_output=(
             '{"type": "<type>", "confidence": <float>}'
         ),

@@ -171,7 +171,11 @@ class DocAI:
                         err_json = response.json()
                     except Exception:
                         err_json = {"detail": response.text}
-                    raise httpx.HTTPStatusError(f"{e} - {json.dumps(err_json)}", request=e.request, response=e.response)
+                    raise httpx.HTTPStatusError(
+                        f"{e} - {json.dumps(err_json)}", 
+                        request=e.request, 
+                        response=e.response
+                    )
                 return response.json()
         finally:
             if file_handle:

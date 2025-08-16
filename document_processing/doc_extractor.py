@@ -83,8 +83,10 @@ def ocr_document(document_path: Union[str, Path]) -> str:
                     with Image.open(path) as img:
                         text = pytesseract.image_to_string(img, lang=ocr_lang)
                 except Exception as img_error:
-                    logger.exception("Both PDF and image OCR failed for %s: PDF error: %s, Image error: %s", 
-                                   path, pdf_error, img_error)
+                    logger.exception(
+                        "Both PDF and image OCR failed for %s: PDF error: %s, Image error: %s",
+                        path, pdf_error, img_error
+                    )
                     return ""
         else:
             # For image formats open directly
@@ -220,7 +222,16 @@ def extract_fields_from_image(
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": f"Look at this document image carefully. Extract the following data and return ONLY a JSON object:\n\n{instructions[:max_output_chars]}\n\nIMPORTANT: Always return a JSON object, even if you can only extract partial information. Do not return empty objects."},
+                                                    {
+                                "type": "text", 
+                                "text": (
+                                    "Look at this document image carefully. Extract the following "
+                                    f"data and return ONLY a JSON object:\n\n"
+                                    f"{instructions[:max_output_chars]}\n\n"
+                                    "IMPORTANT: Always return a JSON object, even if you can only "
+                                    "extract partial information. Do not return empty objects."
+                                )
+                            },
                         {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
                     ],
                 },
@@ -229,12 +240,17 @@ def extract_fields_from_image(
             max_completion_tokens=1200,
         )
         content = resp.choices[0].message.content or "{}"
-        logger.info("GPT-4o Vision response: %s", content[:200] + "..." if len(content) > 200 else content)
+        logger.info(
+            "GPT-4o Vision response: %s", 
+            content[:200] + "..." if len(content) > 200 else content
+        )
         
         try:
             parsed = json.loads(content)
             if parsed:  # If we got data, return it
-                logger.info("Successfully parsed vision extraction result with %d fields", len(parsed))
+                logger.info(
+                    "Successfully parsed vision extraction result with %d fields", len(parsed)
+                )
                 return parsed
             else:
                 logger.warning("GPT returned empty JSON, trying fallback")
@@ -245,7 +261,10 @@ def extract_fields_from_image(
             try:
                 parsed = json.loads(cleaned)
                 if parsed:
-                    logger.info("Successfully parsed cleaned vision extraction result with %d fields", len(parsed))
+                    logger.info(
+                        "Successfully parsed cleaned vision extraction result with %d fields", 
+                        len(parsed)
+                    )
                     return parsed
             except Exception:
                 logger.error("Failed to parse even cleaned JSON response: %s", cleaned[:100])

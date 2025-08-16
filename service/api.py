@@ -76,7 +76,9 @@ def _rate_limit_check(client_ip: str) -> None:
     while timestamps and timestamps[0] < cutoff:
         timestamps.popleft()
     if len(timestamps) >= config.rate_limit_per_min:
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Rate limit exceeded")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Rate limit exceeded"
+        )
     timestamps.append(_now())
 
 
@@ -115,14 +117,22 @@ def _validate_external_url(value: str, field_name: str) -> None:
     except Exception:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid {field_name}")
     if parsed.scheme not in {"http", "https"}:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"{field_name} must use http/https")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail=f"{field_name} must use http/https"
+        )
     if not parsed.hostname or _is_private_ip_addr(parsed.hostname):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"{field_name} points to a private or invalid host")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail=f"{field_name} points to a private or invalid host"
+        )
 
 
 def _validate_upload(file: UploadFile, file_bytes: bytes) -> None:
     if len(file_bytes) > config.max_file_size_mb * 1024 * 1024:
-        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="File too large")
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="File too large"
+        )
     allowed_suffixes = {".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff"}
     filename = file.filename or ""
     if filename and not any(filename.lower().endswith(s) for s in allowed_suffixes):
@@ -130,17 +140,23 @@ def _validate_upload(file: UploadFile, file_bytes: bytes) -> None:
     if file.content_type and not (
         file.content_type == "application/pdf" or file.content_type.startswith("image/")
     ):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported content type")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported content type"
+        )
 
 
-async def _auth_and_rate_limit(request: Request, authorization: Optional[str] = Header(default=None)) -> None:
+async def _auth_and_rate_limit(
+    request: Request, authorization: Optional[str] = Header(default=None)
+) -> None:
     # Rate limit first
     client_ip = request.client.host if request.client else "unknown"
     _rate_limit_check(client_ip)
     # Enforce token if configured
     if config.require_auth:
         if not authorization or not authorization.lower().startswith("bearer "):
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token"
+            )
         token = authorization.split(" ", 1)[1].strip()
         if token not in config.allowed_tokens:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
@@ -222,7 +238,10 @@ async def classify_extract(
     synchronous with a 200 status code.
     """
     if file is None and not file_url:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="file or file_url must be provided")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="file or file_url must be provided"
+        )
 
     # Validate optional flags
     if doc_type is not None:
@@ -240,7 +259,9 @@ async def classify_extract(
             _validate_upload(file, file_bytes)
         elif file_url:
             if not config.allow_file_urls:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Remote URLs are disabled")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="Remote URLs are disabled"
+                )
         # Trigger background processing and return 202 immediately
         loop = asyncio.get_event_loop()
         loop.create_task(
@@ -261,7 +282,9 @@ async def classify_extract(
     # Synchronous path: if file_url is provided, download now
     if file_url:
         if not config.allow_file_urls:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Remote URLs are disabled")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Remote URLs are disabled"
+            )
         _validate_external_url(file_url, "file_url")
         try:
             async with httpx.AsyncClient() as client:
@@ -274,7 +297,10 @@ async def classify_extract(
                 detail=f"Failed to download file from URL: {e}",
             )
         if file_bytes and len(file_bytes) > config.max_file_size_mb * 1024 * 1024:
-            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Downloaded file too large")
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, 
+                detail="Downloaded file too large"
+            )
     elif file is not None:
         file_bytes = await file.read()
         _validate_upload(file, file_bytes)
