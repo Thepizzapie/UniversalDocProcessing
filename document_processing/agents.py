@@ -45,28 +45,77 @@ __all__ = [
     "classify_with_agent",
     "extract_with_agent",
     "refine_extraction_with_agent",
+    "identify_profile_with_agent",
 ]
 
 
 def _default_llm(temperature: float = 1.0, max_tokens: int = 1024) -> ChatOpenAI:
     config = get_config()
-    # GPT-5 uses max_completion_tokens instead of max_tokens and doesn't support temperature=0.0
-    llm_params = {
-        "openai_api_key": config.openai_api_key,
-        "openai_api_base": config.openai_api_base,
-        "model_name": config.model_name,
-    }
+    # GPT-5 uses max_completion_tokens, and requires default temperature (1)
+    if (config.model_name or "").lower() == "gpt-5":
+        return ChatOpenAI(
+            openai_api_key=config.openai_api_key,
+            openai_api_base=config.openai_api_base,
+            model_name=config.model_name,
+            temperature=1.0,
+            max_completion_tokens=max_tokens,
+        )
+    return ChatOpenAI(
+        openai_api_key=config.openai_api_key,
+        openai_api_base=config.openai_api_base,
+        model_name=config.model_name,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
 
-    # Only add temperature for non-GPT-5 models
-    if config.model_name != "gpt-5":
-        llm_params["temperature"] = temperature
-        llm_params["max_tokens"] = max_tokens
-    else:
-        # GPT-5 specific parameters - skip temperature and use max_completion_tokens
-        llm_params["max_completion_tokens"] = max_tokens
 
-    return ChatOpenAI(**llm_params)
+def identify_profile_with_agent(text: str) -> Dict[str, Any]:
+    """Agent 1: Identify document and output a JSON profile from text.
 
+    The profile should summarize structure and likely fields. Falls back to
+    a minimal profile if agent execution fails.
+    """
+    if not _CREWAI_AVAILABLE:
+        # Minimal heuristic profile when CrewAI is unavailable
+        return {
+            "type_hint": "other" if not text else "unknown",
+            "likely_fields": [],
+            "confidence_hints": [],
+        }
+
+    llm = _default_llm(temperature=1.0, max_tokens=600)
+
+    identifier = Agent(
+        role="Document Identifier",
+        goal=(
+            "Analyze OCR text and produce a compact JSON profile describing the document type,"
+            " likely fields present, and structural hints."
+        ),
+        backstory=(
+            "You examine business documents and summarize their structure. Output strictly valid JSON."
+        ),
+        llm=llm,
+        allow_delegation=False,
+        verbose=False,
+    )
+
+    task = Task(
+        description=(
+            "Given the following OCR text, output a JSON object with keys:"
+            " {type_hint, likely_fields, confidence_hints}.\n"
+            "OCR text:\n{text}"
+        ).format(text=text[:3000]),
+        expected_output='{"type_hint": "...", "likely_fields": ["..."], "confidence_hints": ["..."]}',
+        agent=identifier,
+    )
+
+    try:
+        crew = Crew(agents=[identifier], tasks=[task])
+        result = crew.kickoff()
+        content = str(result).strip()
+        return json.loads(content)
+    except Exception:
+        return {"type_hint": "other", "likely_fields": [], "confidence_hints": []}
 
 def classify_with_agent(
     text: str, allowed_types: Optional[List[DocumentType]] = None
@@ -87,7 +136,7 @@ def classify_with_agent(
         allowed_types = list(DocumentType)
     allowed_names = ", ".join([dt.value for dt in allowed_types])
 
-    llm = _default_llm(temperature=0.1, max_tokens=256)
+    llm = _default_llm(temperature=1.0, max_tokens=300)
 
     classifier = Agent(
         role="Document Classifier",
@@ -139,7 +188,7 @@ def extract_with_agent(
     if not _CREWAI_AVAILABLE:
         return lc_extract_fields(text, instructions, max_output_chars=max_output_chars)
 
-    llm = _default_llm(temperature=1.0, max_tokens=2048)
+    llm = _default_llm(temperature=1.0, max_tokens=1200)
 
     extractor = Agent(
         role="Information Extraction Specialist",
@@ -199,7 +248,7 @@ def refine_extraction_with_agent(
         # Without CrewAI we simply return what we have
         return current_data
 
-    llm = _default_llm(temperature=1.0, max_tokens=2048)
+    llm = _default_llm(temperature=1.0, max_tokens=1200)
 
     refiner = Agent(
         role="Extraction Refiner",

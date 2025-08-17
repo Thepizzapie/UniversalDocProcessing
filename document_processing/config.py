@@ -22,8 +22,11 @@ class Config:
         self.openai_api_key = os.environ.get("OPENAI_API_KEY")
         self.openai_api_base = os.environ.get("OPENAI_API_BASE_URL", "https://api.openai.com/v1")
         self.model_name = os.environ.get("MODEL_NAME", "gpt-5")
+        # Vision model can differ from chat model; default to gpt-4o which is vision-capable
+        self.vision_model_name = os.environ.get("VISION_MODEL_NAME", "gpt-4o")
 
         # OCR Configuration
+        self.ocr_enabled = os.environ.get("OCR_ENABLED", "false").lower() in {"1", "true", "yes"}
         self.tesseract_cmd = os.environ.get("TESSERACT_CMD")
         self.poppler_path = os.environ.get("POPPLER_PATH")
         self.ocr_lang = os.environ.get("OCR_LANG", "eng")
@@ -43,6 +46,9 @@ class Config:
         }
         self.max_concurrency = int(os.environ.get("MAX_CONCURRENCY", "4"))
         self.rate_limit_per_min = int(os.environ.get("RATE_LIMIT_PER_MIN", "60"))
+
+        # Optional Redis for distributed rate limiting
+        self.redis_url = os.environ.get("REDIS_URL")
 
         # Demo Web Configuration
         self.doc_api_base_url = os.environ.get("DOC_API_BASE_URL", "http://127.0.0.1:8080")
@@ -105,8 +111,9 @@ class Config:
         return validation["valid"]
 
     def get_doc_types_path(self) -> Path:
-        """Get the path to the document types configuration file."""
-        return Path(__file__).resolve().parent / "config" / "doc_types.yaml"
+        """Get the path to the document types configuration JSON file."""
+        base = Path(__file__).resolve().parent / "config"
+        return base / "doc_types.json"
 
 
 # Global configuration instance

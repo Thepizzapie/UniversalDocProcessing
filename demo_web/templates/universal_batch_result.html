@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Batch Upload Results</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 24px; }
+      pre { background: #f7f7f7; padding: 12px; overflow: auto; }
+      .card { border: 1px solid #ddd; margin-bottom: 16px; padding: 12px; }
+      .meta { color: #666; }
+    </style>
+  </head>
+  <body>
+    <h1>Batch Results</h1>
+    <p><a href="/upload">Upload more</a> | <a href="/">Home</a></p>
+
+    {% for item in results %}
+    <div class="card">
+      <div class="meta">{{ item.filename or 'file' }}</div>
+      <h3>Classification</h3>
+      <pre>{{ (item.classification or {}) | tojson(indent=2) }}</pre>
+      <h3>Extracted Data</h3>
+      <pre>{{ (item.data or {}) | tojson(indent=2) }}</pre>
+      {% if item.errors %}
+      <h3>Errors</h3>
+      <pre>{{ item.errors | tojson(indent=2) }}</pre>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </body>
+  </html>
+
+

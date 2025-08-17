@@ -1,5 +1,5 @@
 # Core document processing framework
-openai>=1.0.0
+openai>=1.30.0
 pillow>=11.3.0
 pypdf>=4.0.0
 python-dotenv>=1.0
@@ -10,16 +10,20 @@ PyYAML>=6.0.1
 fastapi>=0.110
 uvicorn[standard]>=0.22
 httpx>=0.25
+python-multipart>=0.0.9
 
 # Demo web app (optional)
 sqlmodel>=0.0.14
 jinja2>=3.1
 requests>=2.32.4
 
-# OCR fallback (optional - using GPT Vision instead)
-# pytesseract>=0.3.10
-# pdf2image>=1.16
+# OCR support
+pytesseract>=0.3.10
+pdf2image>=1.16
 
 # Legacy dependencies (to be removed)
 langchain>=0.1.14
 langchain-openai>=0.1.0
+
+# Optional distributed rate limiter
+redis>=5.0.4
