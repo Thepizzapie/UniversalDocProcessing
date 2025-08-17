@@ -71,6 +71,14 @@ temp/
 .pytest_cache/
 htmlcov/
 .tox/
+tests/
+
+# Developer utilities not needed by client
+scripts/
+sdk/
+requirements.minimal.txt
+setup.py
+setup.bat
 
 docs/_build/
 
