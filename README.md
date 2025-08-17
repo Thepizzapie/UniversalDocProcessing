@@ -1,54 +1,53 @@
 # Document AI Framework
 
-> **Production-Ready**: A complete plug-and-play document processing framework powered by GPT-5 Vision
-
-Transform any image or PDF into structured data with just a few lines of code. This framework handles document classification, field extraction, and data processing using advanced AI - no machine learning expertise required.
+> AI-only document classification and extraction service (Vision + Chat)
 
 ## What This Framework Does
 
 - **Document Processing**: Upload any invoice, receipt, or custom document as image/PDF
-- **AI-Powered Extraction**: Uses GPT-5 Vision to intelligently extract structured data
+- **AI-Powered**: Classification + extraction using OpenAI (`MODEL_NAME` for text processing, `VISION_MODEL_NAME` for image analysis)
 - **Plug-and-Play**: Integrate into your existing backend with minimal code changes
 - **Structured Output**: Get clean JSON data ready for your database
-- **Configurable**: Add new document types by updating simple YAML instructions
+- **Configurable**: Add new document types by updating simple JSON instructions
 
-## Quick Start (5 Minutes)
+## Quick Start
 
-### 1. Installation
+### 1) Install dependencies
 ```bash
-git clone <repository-url>
-cd doc_ai_project
-python setup.py  # Automated setup
+pip install -r requirements.txt
 ```
 
-### 2. Configuration
-```bash
-# Add your OpenAI API key
-echo "OPENAI_API_KEY=sk-your-key-here" > .env
+### 2) Configure environment
+Create a `.env` file (see `.env.example` below):
+```env
+OPENAI_API_KEY=sk-your-key-here
+MODEL_NAME=gpt-5
+VISION_MODEL_NAME=gpt-4o
+OPENAI_API_BASE_URL=https://api.openai.com/v1
+MAX_CONCURRENCY=4
+RATE_LIMIT_PER_MIN=60
 ```
 
-### 3. Run the Framework
+### 3) Start the service
 ```bash
-# Start the API service
 python main.py
 ```
 
-### 4. Test Document Processing
+### 4) Try it
 ```bash
-# Upload a receipt/invoice image
-curl -X POST -F "file=@test_receipt.txt" http://localhost:8080/classify-extract
+curl -X POST -F "file=@sample.pdf" http://localhost:8080/classify-extract
 ```
-
-**Output**: Clean JSON data ready for your database!
 
 ## How It Works
 
-### The Magic Behind the Scenes
+### Processing flow (AI-only)
 
-1. **Upload**: Send any image/PDF to the API endpoint
-2. **AI Classification**: GPT-5 Vision identifies document type (invoice, receipt, etc.)
-3. **Data Extraction**: AI extracts structured fields based on your configurations
-4. **Clean Output**: Get perfect JSON ready for your database
+1. Classification: Uses vision models to classify documents directly from images/PDFs
+2. Extraction: Extract structured fields using JSON-based instructions via vision models
+3. Vision Fallback: Primary extraction method uses OpenAI Vision API for image understanding
+4. Output: JSON suitable for your backend
+
+**Note**: This framework is designed as AI-only by default. OCR libraries are included for future enhancement but are not currently active in the pipeline.
 
 ```json
 {
@@ -62,7 +61,7 @@ curl -X POST -F "file=@test_receipt.txt" http://localhost:8080/classify-extract
 }
 ```
 
-## Integration Guide
+## Integration Guide (brief)
 
 ### Backend Integration (Any Framework)
 
@@ -79,24 +78,7 @@ async def process_document(file: UploadFile):
 
 **That's it!** Your backend now has AI document processing.
 
-### Frontend Integration
-
-**Simple file upload component:**
-
-```javascript
-const uploadDocument = async (file) => {
-  const formData = new FormData();
-  formData.append('file', file);
-  
-  const response = await fetch('/process-document', {
-    method: 'POST',
-    body: formData
-  });
-  
-  const extractedData = await response.json();
-  // extractedData contains structured fields ready for your database
-};
-```
+See `sdk/client.py` for a Python client. The long React example was moved out of Quick Start to keep this README concise.
 
 ### Database Integration
 
@@ -115,295 +97,7 @@ db.save(invoice)
 
 ## Custom Frontend & Backend Integration
 
-**Note:** Setting up the Document AI framework with your own frontend and backend may differ slightly from the demo web application. Here's how to integrate it into a real-world React application with a custom backend.
-
-### **React Frontend Example**
-
-#### **1. File Upload Component**
-
-Create a React component for document upload:
-
-```jsx
-// components/DocumentUploader.jsx
-import React, { useState } from 'react';
-import axios from 'axios';
-
-const DocumentUploader = ({ documentType, onSuccess }) => {
-  const [file, setFile] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  const handleFileChange = (event) => {
-    setFile(event.target.files[0]);
-    setError(null);
-  };
-
-  const handleUpload = async () => {
-    if (!file) return;
-
-    setLoading(true);
-    setError(null);
-
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('doc_type', documentType);
-
-    try {
-      // Call your backend API endpoint
-      const response = await axios.post('/api/documents/process', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
-      // Handle successful extraction
-      onSuccess(response.data);
-      setFile(null);
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Upload failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="document-uploader">
-      <input
-        type="file"
-        accept="image/*,.pdf"
-        onChange={handleFileChange}
-        disabled={loading}
-      />
-      <button 
-        onClick={handleUpload} 
-        disabled={!file || loading}
-        className="upload-btn"
-      >
-        {loading ? 'Processing...' : 'Upload & Extract'}
-      </button>
-      {error && <div className="error">{error}</div>}
-    </div>
-  );
-};
-
-export default DocumentUploader;
-```
-
-#### **2. Invoice Management Page**
-
-```jsx
-// pages/InvoiceManager.jsx
-import React, { useState, useEffect } from 'react';
-import DocumentUploader from '../components/DocumentUploader';
-import axios from 'axios';
-
-const InvoiceManager = () => {
-  const [invoices, setInvoices] = useState([]);
-
-  useEffect(() => {
-    fetchInvoices();
-  }, []);
-
-  const fetchInvoices = async () => {
-    try {
-      const response = await axios.get('/api/invoices');
-      setInvoices(response.data);
-    } catch (error) {
-      console.error('Failed to fetch invoices:', error);
-    }
-  };
-
-  const handleUploadSuccess = (extractedData) => {
-    // Show success message
-    alert('Invoice processed successfully!');
-    
-    // Refresh the invoice list
-    fetchInvoices();
-    
-    // Optionally, show extracted data for review
-    console.log('Extracted data:', extractedData);
-  };
-
-  return (
-    <div className="invoice-manager">
-      <h1>Invoice Management</h1>
-      
-      <div className="upload-section">
-        <h2>Upload New Invoice</h2>
-        <DocumentUploader 
-          documentType="invoice"
-          onSuccess={handleUploadSuccess}
-        />
-      </div>
-
-      <div className="invoice-list">
-        <h2>Recent Invoices</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Invoice #</th>
-              <th>Vendor</th>
-              <th>Amount</th>
-              <th>Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {invoices.map(invoice => (
-              <tr key={invoice.id}>
-                <td>{invoice.invoice_number}</td>
-                <td>{invoice.vendor_name}</td>
-                <td>${invoice.total_amount}</td>
-                <td>{invoice.invoice_date}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-};
-
-export default InvoiceManager;
-```
-
-### **Custom Backend Integration**
-
-#### **1. Express.js + Node.js Backend**
-
-```javascript
-// routes/documents.js
-const express = require('express');
-const multer = require('multer');
-const axios = require('axios');
-const router = express.Router();
-
-// Configure multer for file uploads
-const upload = multer({ 
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
-});
-
-// Document processing endpoint
-router.post('/process', upload.single('file'), async (req, res) => {
-  try {
-    const { doc_type } = req.body;
-    const file = req.file;
-
-    if (!file) {
-      return res.status(400).json({ detail: 'No file provided' });
-    }
-
-    // Call the Document AI Framework API
-    const formData = new FormData();
-    formData.append('file', file.buffer, file.originalname);
-    formData.append('doc_type', doc_type);
-    formData.append('use_agents', 'true');
-    formData.append('refine', 'true');
-
-    const response = await axios.post(
-      `${process.env.DOC_AI_API_URL}/classify-extract`,
-      formData,
-      {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${process.env.DOC_AI_API_TOKEN}` // if using auth
-        }
-      }
-    );
-
-    const extractedData = response.data.data;
-
-    // Save to your database
-    if (doc_type === 'invoice') {
-      const invoice = await Invoice.create({
-        invoice_number: extractedData.invoice_number,
-        vendor_name: extractedData.vendor_name,
-        total_amount: parseFloat(extractedData.total_amount),
-        invoice_date: extractedData.invoice_date,
-        currency: extractedData.currency || 'USD'
-      });
-
-      res.json({
-        success: true,
-        invoice: invoice,
-        extracted: extractedData
-      });
-    }
-
-  } catch (error) {
-    console.error('Document processing error:', error);
-    res.status(500).json({ 
-      detail: error.response?.data?.detail || 'Processing failed' 
-    });
-  }
-});
-
-module.exports = router;
-```
-
-#### **2. Django REST Framework Backend**
-
-```python
-# views.py
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser
-from rest_framework import status
-import requests
-from .models import Invoice
-from .serializers import InvoiceSerializer
-
-class DocumentProcessView(APIView):
-    parser_classes = [MultiPartParser]
-
-    def post(self, request):
-        file = request.FILES.get('file')
-        doc_type = request.data.get('doc_type')
-
-        if not file:
-            return Response({'detail': 'No file provided'}, 
-                          status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            # Call Document AI Framework
-            files = {'file': (file.name, file, file.content_type)}
-            data = {
-                'doc_type': doc_type,
-                'use_agents': 'true',
-                'refine': 'true'
-            }
-
-            response = requests.post(
-                f"{settings.DOC_AI_API_URL}/classify-extract",
-                files=files,
-                data=data,
-                timeout=120
-            )
-            response.raise_for_status()
-
-            extracted_data = response.json()['data']
-
-            # Save to database
-            if doc_type == 'invoice':
-                invoice = Invoice.objects.create(
-                    invoice_number=extracted_data.get('invoice_number', ''),
-                    vendor_name=extracted_data.get('vendor_name', ''),
-                    total_amount=float(extracted_data.get('total_amount', 0)),
-                    invoice_date=extracted_data.get('invoice_date', ''),
-                    currency=extracted_data.get('currency', 'USD')
-                )
-
-                serializer = InvoiceSerializer(invoice)
-                return Response({
-                    'success': True,
-                    'invoice': serializer.data,
-                    'extracted': extracted_data
-                })
-
-        except requests.RequestException as e:
-            return Response({'detail': str(e)}, 
-                          status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-```
+The full React and backend examples have been moved to `docs/frontend_example.md`.
 
 ### **Key Differences from Demo Web App**
 
@@ -467,54 +161,105 @@ Update your environment variables:
 
 ```bash
 # .env file for your custom app
-DOC_AI_API_URL=http://localhost:8080  # Document AI Framework API
-DOC_AI_API_TOKEN=your-optional-token  # If using authentication
 
-# Your existing variables
+# Document AI Framework Configuration
+OPENAI_API_KEY=sk-your-key-here                    # Required: OpenAI API key
+MODEL_NAME=gpt-5                                   # Chat model for text processing
+VISION_MODEL_NAME=gpt-4o                           # Vision model for image processing
+OPENAI_API_BASE_URL=https://api.openai.com/v1     # OpenAI API base URL
+
+# Processing Limits
+MAX_CONCURRENCY=4                                  # Concurrent processing limit
+RATE_LIMIT_PER_MIN=60                             # API rate limiting
+MAX_FILE_SIZE_MB=15                               # Maximum file size
+
+# Security & Authentication
+ALLOWED_TOKENS=token1,token2,token3               # Comma-separated API tokens
+ALLOW_FILE_URLS=true                              # Allow processing from URLs
+
+# OCR Configuration (Future Enhancement)
+OCR_ENABLED=false                                 # Enable OCR processing
+TESSERACT_CMD=/usr/bin/tesseract                  # Path to Tesseract binary
+POPPLER_PATH=/usr/bin                             # Path to Poppler utilities
+OCR_LANG=eng                                      # OCR language
+
+# Demo Web App Integration
+DOC_API_BASE_URL=http://localhost:8080            # Document AI Framework API
+DOC_API_TOKEN=your-optional-token                 # API authentication token
+
+# Optional: Distributed Rate Limiting
+REDIS_URL=redis://localhost:6379                  # Redis for distributed rate limiting
+
+# Your existing application variables
 DATABASE_URL=postgresql://...
 REDIS_URL=redis://...
 ```
 
 This approach gives you maximum flexibility while leveraging the powerful Document AI Framework for extraction!
 
-## Document Type Configuration
+## Document Type Configuration (JSON)
 
 ### Setting Up Instructions for Your Document Types
 
-The framework uses simple YAML files to define what data to extract from each document type. This is where the magic happens!
+The framework uses a JSON file to define what data to extract from each document type. This is where the magic happens!
 
 #### 1. Edit the Configuration File
 
-Open `document_processing/config/doc_types.yaml` and add your document types:
+Open `document_processing/config/doc_types.json` and add your document types. Each type contains:
+- `description`: human description
+- `instructions.schema`: keys to extract with descriptions
+- `instructions.guidelines`: bullet points the model should follow
+- `profile`: optional keywords/likely fields
 
-```yaml
-# Example: Purchase Orders
-purchase_order:
-  description: "Purchase Order document" 
-  instructions: |
-    Extract the following fields from this purchase order:
-      - po_number: Purchase order number
-      - vendor_name: Supplier company name  
-      - order_date: Date the order was placed
-      - delivery_date: Expected delivery date
-      - total_amount: Total dollar amount
-      - line_items: List of items being ordered
-    
-    Return JSON with these exact field names.
-
-# Example: Shipping Labels  
-shipping_label:
-  description: "Shipping label"
-  instructions: |
-    Extract the following fields:
-      - tracking_number: Package tracking number
-      - sender_name: Name of sender
-      - recipient_name: Name of recipient  
-      - delivery_address: Full delivery address
-      - weight: Package weight
-      - service_type: Shipping service (overnight, ground, etc.)
-    
-    Return JSON with these exact field names.
+```json
+{
+  "purchase_order": {
+    "description": "Purchase Order document",
+    "instructions": {
+      "schema": {
+        "po_number": "Purchase order number",
+        "vendor_name": "Supplier company name",
+        "order_date": "Date the order was placed (YYYY-MM-DD)",
+        "delivery_date": "Expected delivery date (YYYY-MM-DD)",
+        "total_amount": "Total dollar amount (numeric)",
+        "line_items": "Array of items being ordered with description, quantity, unit_price, amount"
+      },
+      "guidelines": [
+        "Extract numeric values as numbers, not strings",
+        "Normalize dates to YYYY-MM-DD when possible",
+        "Parse line_items as an array of objects"
+      ]
+    },
+    "profile": {
+      "keywords": ["purchase order", "PO", "vendor", "delivery"],
+      "likely_fields": ["po_number", "vendor_name", "total_amount"],
+      "confidence_hints": ["presence of 'PO' or 'Purchase Order' in title"]
+    }
+  },
+  "shipping_label": {
+    "description": "Shipping label",
+    "instructions": {
+      "schema": {
+        "tracking_number": "Package tracking number",
+        "sender_name": "Name of sender",
+        "recipient_name": "Name of recipient",
+        "delivery_address": "Full delivery address",
+        "weight": "Package weight (numeric value with units)",
+        "service_type": "Shipping service (overnight, ground, etc.)"
+      },
+      "guidelines": [
+        "Extract tracking number as string",
+        "Include full address with city, state, zip",
+        "Convert weight to standard units if possible"
+      ]
+    },
+    "profile": {
+      "keywords": ["tracking", "delivery", "shipping", "address"],
+      "likely_fields": ["tracking_number", "delivery_address", "weight"],
+      "confidence_hints": ["barcode present", "shipping service logos"]
+    }
+  }
+}
 ```
 
 #### 2. Update the Document Types Enum
@@ -558,20 +303,26 @@ uvicorn service.api:app --host 0.0.0.0 --port 8080 --workers 4
 
 **2. Docker Deployment**
 ```yaml
-# docker-compose.yml
-version: '3'
+# docker-compose.yml (example)
+version: '3.8'
 services:
   doc-ai-1:
     build: .
-    ports: ["8080:8080"]
+    ports: 
+      - "8080:8080"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - MODEL_NAME=${MODEL_NAME:-gpt-5}
+      - VISION_MODEL_NAME=${VISION_MODEL_NAME:-gpt-4o}
   
   doc-ai-2:
     build: .
-    ports: ["8081:8080"] 
+    ports: 
+      - "8081:8080"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - MODEL_NAME=${MODEL_NAME:-gpt-5}
+      - VISION_MODEL_NAME=${VISION_MODEL_NAME:-gpt-4o}
 ```
 
 **3. Kubernetes Deployment**
@@ -629,61 +380,57 @@ def save_batch(extracted_documents):
     ])
 ```
 
-## OCR Fallback (Optional)
+## OCR (Future Enhancement)
 
-By default, the framework uses GPT-5 Vision which works excellently for most documents. However, you can add traditional OCR as a fallback for edge cases.
+The current implementation is **AI-only** and uses OpenAI Vision models for direct image understanding. OCR libraries are included in the dependencies for future enhancement but are not currently active in the processing pipeline.
 
-### Installing OCR Support
+### Current Vision-Based Approach
 
-**1. Install Tesseract**
+The framework directly processes images and PDFs using:
+- **OpenAI Vision API** for image classification and extraction
+- **PDF to image conversion** for PDF processing
+- **No intermediate OCR text step** - works directly with visual content
+
+### OCR Integration (Future)
+
+If you want to add OCR support:
+
+**1. Install OCR Dependencies**
 ```bash
 # Ubuntu/Debian
-sudo apt-get install tesseract-ocr
+sudo apt-get install tesseract-ocr poppler-utils
 
 # macOS  
-brew install tesseract
+brew install tesseract poppler
 
 # Windows
-# Download from: https://github.com/UB-Mannheim/tesseract/wiki
+# Download Tesseract from: https://github.com/UB-Mannheim/tesseract/wiki
+# Download Poppler from: https://github.com/oschwartz10612/poppler-windows
 ```
 
-**2. Enable OCR Fallback**
-
-Update your `.env` file:
-```bash
-OCR_PROVIDER=tesseract
-OCR_FALLBACK=true
+**2. Configure OCR Paths (Windows)**
+```env
+OCR_ENABLED=true
+TESSERACT_CMD=C:\\Program Files\\Tesseract-OCR\\tesseract.exe
+POPPLER_PATH=C:\\path\\to\\poppler\\bin
 ```
 
-**3. OCR Integration Flow**
+**3. Modify Pipeline**
+Update `pipeline.py` to enable OCR text extraction before vision processing.
 
-When enabled, the framework will:
-1. **First**: Try GPT-5 Vision (faster, more accurate)
-2. **Fallback**: Use OCR + text-based extraction if Vision fails
-3. **Combine**: Merge results for maximum data extraction
+### Benefits of Current Vision Approach
 
-```python
-# The framework automatically handles this, but you can customize:
-result = run_pipeline(
-    file_content,
-    use_agents=True,      # Use GPT-5 Vision
-    ocr_fallback=True     # Enable OCR backup
-)
-```
-
-### When to Use OCR Fallback
-
-- **High volume processing** (OCR is faster for simple text extraction)
-- **Low-quality images** (OCR sometimes works better on poor scans)
-- **Cost optimization** (OCR is cheaper than Vision API calls)
-- **Offline processing** (OCR works without internet)
+- **No OCR preprocessing** required
+- **Better handling of complex layouts** (tables, forms, mixed content)
+- **Direct understanding** of visual elements like logos, signatures
+- **Robust with poor quality scans** or photographed documents
 
 ## Architecture Overview
 
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Your Frontend │────│  Document AI API │────│  GPT-5 Vision   │
-│   (File Upload) │    │   (This Framework)│    │   (OpenAI)      │
+│   Your Frontend │────│  Document AI API │────│  OpenAI Model    │
+│   (File Upload) │    │   (This Framework)│    │   (gpt-5)        │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
                                 │
                                 ▼
@@ -705,9 +452,10 @@ result = run_pipeline(
 ```
 doc_ai_project/
 │
-├── document_processing/     # Core AI processing logic
+├── document_processing/     # Core AI processing logic (AI-only)
 │   ├── config/
-│   │   └── doc_types.yaml   # Document type definitions
+│   │   └── doc_types.json   # Document type definitions
+│   ├── config.py            # Configuration management
 │   ├── doc_classifier.py    # Document classification
 │   ├── doc_extractor.py     # Data extraction
 │   ├── pipeline.py          # Processing pipeline
@@ -726,10 +474,13 @@ doc_ai_project/
 │   └── templates/           # Web templates
 │
 ├── tests/                   # Test suite
-├── .github/                 # GitHub workflows
 ├── Dockerfile               # Container definition
 ├── requirements.txt         # Python dependencies
-├── setup.py                 # Setup script
+├── pyproject.toml           # Packaging metadata
+├── CODE_OF_CONDUCT.md       # Community standards
+├── CONTRIBUTING.md          # How to contribute
+├── env.example              # Environment variable template
+├── LICENSE                  # Apache-2.0 license
 └── main.py                  # Entry point
 ```
 
@@ -749,8 +500,9 @@ python -m pytest tests/test_api.py
 
 ### Development Setup
 ```bash
-# Install development dependencies
+# Install dependencies and dev tools
 pip install -r requirements.txt
+pip install pytest pytest-asyncio
 
 # Format code
 black document_processing/ service/ sdk/
@@ -781,7 +533,7 @@ git push heroku main
 # Use the included Dockerfile for container deployment
 ```
 
-## Step-by-Step: Adding Load Sheet Uploader
+## Step-by-Step: Adding Load Sheet Uploader (Demo)
 
 Follow this complete guide to add a load sheet uploader to your demo web application, just like we did for invoices and receipts.
 
@@ -952,22 +704,35 @@ Edit `demo_web/templates/loads_list.html` and add the upload link:
 
 ### **Step 4: Configure Load Sheet Instructions**
 
-Your `document_processing/config/doc_types.yaml` should already have load sheet configuration. If not, add:
+Your `document_processing/config/doc_types.json` should already have load sheet configuration. If not, add:
 
-```yaml
-load_sheet:
-  description: "Load sheet or bill of lading document"
-  instructions: |
-    Extract the following fields from this load sheet or bill of lading:
-      - load_number: Load number, BOL number, or reference number
-      - pickup_location: Pickup address or origin location
-      - dropoff_location: Delivery address or destination location  
-      - pickup_date: Date of pickup or departure (format as MM/DD/YYYY)
-      - dropoff_date: Date of delivery or arrival (format as MM/DD/YYYY)
-      - carrier_name: Trucking company or carrier name
-      - total_weight_lbs: Total weight in pounds (numeric value only)
-    
-    Return JSON with these exact field names. Convert weights to pounds if given in other units.
+```json
+{
+  "load_sheet": {
+    "description": "Load sheet or bill of lading document",
+    "instructions": {
+      "schema": {
+        "load_number": "Load number, BOL number, or reference number",
+        "pickup_location": "Pickup address or origin location",
+        "dropoff_location": "Delivery address or destination location",
+        "pickup_date": "Date of pickup or departure (YYYY-MM-DD)",
+        "dropoff_date": "Date of delivery or arrival (YYYY-MM-DD)",
+        "carrier_name": "Trucking company or carrier name",
+        "total_weight_lbs": "Total weight in pounds (numeric value only)"
+      },
+      "guidelines": [
+        "Convert weights to pounds if given in other units",
+        "Normalize dates to YYYY-MM-DD when possible",
+        "Extract numeric values as numbers, not strings"
+      ]
+    },
+    "profile": {
+      "keywords": ["load", "BOL", "bill of lading", "carrier", "pickup", "delivery"],
+      "likely_fields": ["load_number", "pickup_location", "dropoff_location", "total_weight_lbs"],
+      "confidence_hints": ["origin/destination blocks", "weight with units"]
+    }
+  }
+}
 ```
 
 ### **Step 5: Update Document Type Enum**
@@ -995,8 +760,8 @@ When you upload a load sheet:
 
 1. **Frontend** → `POST /load-sheets/upload` with file
 2. **Demo Web** → Calls Document AI API with `doc_type=load_sheet`
-3. **AI Framework** → Uses load_sheet YAML instructions for extraction
-4. **GPT-5 Vision** → Extracts structured data from the image
+3. **AI Framework** → Uses load_sheet JSON instructions for extraction
+4. **Vision Fallback (optional)** → Extracts structured data from the image if OCR/text path yields no data
 5. **Field Mapping** → Maps AI output to database schema
 6. **Database** → Saves LoadSheetEntry with clean data
 
@@ -1044,15 +809,15 @@ This framework is perfect for:
 - **Purchase Orders**: Procurement automation
 - **Medical Forms**: Healthcare document processing
 - **Financial Documents**: Banking and insurance
-- **Any Custom Document**: Just update the YAML configuration!
+- **Any Custom Document**: Just update the JSON configuration!
 
 ## Contributing
 
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+We welcome contributions!
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+Apache-2.0 - see `LICENSE`.
 
 ---
 

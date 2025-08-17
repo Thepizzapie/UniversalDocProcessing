@@ -31,15 +31,21 @@ from pathlib import Path
 from typing import Dict, Optional, Union
 
 from .agents import (
+    classify_with_agent,
+    extract_with_agent,
     refine_extraction_with_agent,
+    identify_profile_with_agent,
 )
 from .config import validate_config
 from .doc_classifier import (
     ClassificationResult,
     DocumentType,
     get_instructions_for_type,
+    classify_document,
+    classify_document_openai,
+    classify_document_from_image,
 )
-from .doc_extractor import extract_fields_from_image
+from .doc_extractor import extract_fields, extract_fields_from_image
 
 __all__ = ["run_pipeline"]
 
@@ -97,46 +103,60 @@ def run_pipeline(
     else:
         tmp_path = Path(file_path)
 
-    # Step 1: Skip OCR, use GPT-5 Vision directly for images
-    logger.info("pipeline:starting step=vision_extraction")
-    text = ""  # Skip OCR entirely
-    logger.info("pipeline:finished step=vision_extraction chars=%s", len(text) if text else 0)
+    errors = []
 
-    # Step 2: Classify the document (unless forced)
+    # Step 1: No OCR – AI-only pipeline
+    text = ""
+
+    # Step 2: Identify profile (Agent 1) and classify (Agent 2) unless forced
     if forced_doc_type:
         try:
             forced_enum = DocumentType(forced_doc_type)
         except Exception:
-            forced_enum = DocumentType.RECEIPT  # Default fallback
+            # Prefer a neutral fallback instead of assuming receipt
+            forced_enum = DocumentType.OTHER
         classification: ClassificationResult = ClassificationResult(
             type=forced_enum, confidence=1.0
         )
     else:
-        # Use GPT-5 Vision to classify the document type
+        # Identify a profile first
+        profile = {}
         try:
-            # Simple classification prompt
-            document_types = ", ".join([t.value for t in DocumentType])
-            classify_prompt = (
-                f"Look at this document image and classify it as one of these types: "
-                f"{document_types}. Return only the exact type name."
-            )
-            classification_result = extract_fields_from_image(tmp_path, classify_prompt)
-            doc_type_str = (
-                list(classification_result.values())[0] if classification_result else "receipt"
-            )
+            profile = identify_profile_with_agent(text or "") if use_agents else {}
+        except Exception:
+            profile = {}
 
-            # Find matching document type
-            classified_type = DocumentType.RECEIPT  # default
-            for doc_type in DocumentType:
-                if doc_type.value.lower() in doc_type_str.lower():
-                    classified_type = doc_type
-                    break
-
-            classification = ClassificationResult(type=classified_type, confidence=0.9)
-            logger.info("pipeline: classified document as %s", classified_type.value)
+        # Classify using OCR text / profile.
+        try:
+            if use_agents:
+                if text:
+                    classification = classify_with_agent(text)
+                else:
+                    # No text → classify directly from image using vision
+                    classification = classify_document_from_image(str(tmp_path))
+            else:
+                # If no OCR text, try image-based classification first
+                if not text and tmp_path.exists():
+                    classification = classify_document_from_image(str(tmp_path))
+                else:
+                    # For gpt-5, prefer direct OpenAI client to avoid LangChain max_tokens usage
+                    from .config import get_config as _gc
+                    if (_gc().model_name or "").lower() == "gpt-5":
+                        classification = classify_document_openai(text or "")
+                    else:
+                        classification = classify_document(text or "")
+            logger.info(
+                "pipeline: classified document as %s (conf=%.3f)",
+                classification.type.value,
+                classification.confidence,
+            )
+            # If OCR text is empty, lower confidence
+            if not text:
+                classification.confidence = min(classification.confidence, 0.2)
         except Exception as err:
             logger.exception("pipeline: classification failed: %s", err)
-            classification = ClassificationResult(type=DocumentType.RECEIPT, confidence=0.5)
+            errors.append(f"classification_failed: {err}")
+            classification = ClassificationResult(type=DocumentType.OTHER, confidence=0.0)
     logger.info(
         "pipeline:finished step=classify type=%s conf=%.3f",
         classification.type.value,
@@ -146,20 +166,72 @@ def run_pipeline(
     # Step 3: Retrieve extraction instructions
     instructions = get_instructions_for_type(classification.type)
 
-    # Step 4: Extract fields using GPT-5 Vision directly
-    try:
-        # Always use vision-based extraction - don't rely on file extension for temp files
-        logger.info("pipeline: using GPT-5 vision extraction for file %s", tmp_path.name)
-        data = extract_fields_from_image(tmp_path, instructions)
-        logger.info(
-            "pipeline: vision extraction returned %d fields: %s",
-            len(data),
-            list(data.keys()) if data else "none",
-        )
-    except Exception as err:
-        logger.exception("pipeline: extraction failed: %s", err)
-        data = {}
-    logger.info("pipeline:finished step=extract has_data=%s", bool(data))
+    # Helper to decide if JSON has meaningful values
+    def _is_meaningful(d: Dict) -> bool:
+        if not isinstance(d, dict) or not d:
+            return False
+        for v in d.values():
+            if v is None:
+                continue
+            if isinstance(v, str) and v.strip() == "":
+                continue
+            if isinstance(v, (list, tuple, set)) and len(v) == 0:
+                continue
+            # Numbers (including 0) and non-empty strings/lists count as meaningful
+            return True
+        return False
+
+    data = {}
+    # If OCR text is empty, go straight to vision extraction
+    if not text and tmp_path.exists():
+        try:
+            logger.info("pipeline: no OCR text; using vision extraction for %s", tmp_path.name)
+            vision_data = extract_fields_from_image(tmp_path, instructions)
+            if isinstance(vision_data, dict) and vision_data:
+                data = vision_data
+                logger.info(
+                    "pipeline: vision fallback succeeded with %d fields",
+                    len(vision_data),
+                )
+            else:
+                logger.warning("pipeline: vision extraction returned no data")
+        except Exception as vision_err:
+            logger.exception("pipeline: vision fallback failed: %s", vision_err)
+            errors.append(f"vision_fallback_failed: {vision_err}")
+    else:
+        # Try text extraction first
+        try:
+            if use_agents:
+                data = extract_with_agent(text or "", instructions)
+            else:
+                data = extract_fields(text or "", instructions)
+            logger.info(
+                "pipeline: text extraction returned %d fields: %s",
+                len(data) if isinstance(data, dict) else -1,
+                list(data.keys()) if isinstance(data, dict) and data else "none",
+            )
+        except Exception as err:
+            logger.exception("pipeline: text extraction failed: %s", err)
+            data = {}
+            errors.append(f"extraction_failed: {err}")
+
+        # Vision fallback when extracted JSON has no meaningful values
+        if not _is_meaningful(data) and tmp_path.exists():
+            try:
+                logger.info("pipeline: falling back to vision extraction for %s", tmp_path.name)
+                vision_data = extract_fields_from_image(tmp_path, instructions)
+                if isinstance(vision_data, dict) and _is_meaningful(vision_data):
+                    data = vision_data
+                    logger.info(
+                        "pipeline: vision fallback succeeded with %d fields",
+                        len(vision_data),
+                    )
+                else:
+                    logger.warning("pipeline: vision fallback returned no meaningful data")
+            except Exception as vision_err:
+                logger.exception("pipeline: vision fallback failed: %s", vision_err)
+                errors.append(f"vision_fallback_failed: {vision_err}")
+    logger.info("pipeline:finished step=extract has_data=%s", _is_meaningful(data))
 
     # Optional refinement pass
     if run_refine_pass and use_agents and data:
@@ -181,6 +253,8 @@ def run_pipeline(
     }
     if return_text:
         result["raw_text"] = text
+    if errors:
+        result["errors"] = errors
 
     # Clean up temporary file if we created one
     if file is not None:

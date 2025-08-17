@@ -72,20 +72,15 @@ temp/
 htmlcov/
 .tox/
 
-# Documentation builds
 docs/_build/
 
-# CI/CD and dev files clients don't need
-.github/
-requirements.minimal.txt
-setup.py
-setup.bat
-pyproject.toml
-tests/
-scripts/
-demo_web/
-CODE_OF_CONDUCT.md
-CONTRIBUTING.md
-LICENSE
-env.example
+# Keep JSON config tracked; ignore legacy YAML (already removed)
+document_processing/config/doc_types.yaml
+
+# Ensure docs are tracked (do not ignore)
+!README.md
+!CODE_OF_CONDUCT.md
+!CONTRIBUTING.md
+!LICENSE
+!pyproject.toml
 

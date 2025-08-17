@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Receipts</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 24px; }
+      table { border-collapse: collapse; width: 100%; }
+      th, td { border: 1px solid #ccc; padding: 8px; }
+      th { background: #f5f5f5; }
+      a { margin-right: 12px; }
+    </style>
+  </head>
+  <body>
+    <h1>Receipts</h1>
+    <p>
+      <a href="/">Home</a>
+      <a href="/receipts/new">New Receipt</a>
+      <a href="/receipts/upload">Upload Receipt</a>
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Txn ID</th>
+          <th>Date</th>
+          <th>Merchant</th>
+          <th>Total Paid</th>
+          <th>Method</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Example row reflecting sample receipt provided -->
+        <tr>
+          <td>—</td>
+          <td>YWG5</td>
+          <td>Jan 24, 2019 10:29 AM</td>
+          <td>CAFE PARISIEN LARCHMONT LLC</td>
+          <td>9.58</td>
+          <td>Unknown</td>
+          <td>Dine In; Server: Kimberly L.; Table: 36; Address: 242 N Larchmont Blvd, Los Angeles, CA 90004; Items: Croissant aux raisins $4.00; Cappuccino $4.75; Subtotal $8.75; Sales Tax (9.5%) $0.83; Total $9.58.</td>
+        </tr>
+        {% for i in items %}
+        <tr>
+          <td>{{ i.id }}</td>
+          <td>{{ i.transaction_id }}</td>
+          <td>{{ i.purchase_date }}</td>
+          <td>{{ i.merchant_name }}</td>
+          <td>{{ i.total_paid }}</td>
+          <td>{{ i.payment_method }}</td>
+          <td>{{ i.notes }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </body>
+  </html>
+
+
+

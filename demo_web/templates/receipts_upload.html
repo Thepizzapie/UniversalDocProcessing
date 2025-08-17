@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Upload Receipt</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 24px; }
+      form > div { margin-bottom: 10px; }
+    </style>
+  </head>
+  <body>
+    <h1>Upload Receipt</h1>
+    <p><a href="/receipts">Back to list</a></p>
+    <form method="post" enctype="multipart/form-data">
+      <div>
+        <label>File (PDF or image)
+          <input type="file" name="file" accept="application/pdf,image/*" required />
+        </label>
+      </div>
+      <button type="submit">Upload & Save</button>
+    </form>
+  </body>
+  </html>
+
+
