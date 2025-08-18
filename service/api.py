@@ -47,7 +47,10 @@ from fastapi.responses import JSONResponse
 load_dotenv()
 
 from document_processing.config import get_config, validate_config  # noqa: E402
-from document_processing.doc_classifier import DocumentType  # noqa: E402
+from document_processing.doc_classifier import (
+    DocumentType,
+    get_instructions_for_type,
+)  # noqa: E402
 from document_processing.pipeline import run_pipeline  # noqa: E402
 
 # Configure basic logging
@@ -559,3 +562,28 @@ async def classify_extract_batch(
             _service_metrics["document_types_processed"][doc_type_processed] += 1
 
     return JSONResponse(status_code=status.HTTP_200_OK, content=results)
+
+
+# --- Document Types Management (read-only) -----------------------------------
+
+@app.get("/doc-types")
+async def list_document_types(_: None = Depends(_auth_and_rate_limit)) -> JSONResponse:
+    """Return the list of supported document types.
+
+    This endpoint is read-only and meant for UI configuration screens.
+    """
+    types = [dt.value for dt in DocumentType]
+    return JSONResponse(status_code=status.HTTP_200_OK, content={"types": types})
+
+
+@app.get("/doc-types/{doc_type}")
+async def get_document_type(
+    doc_type: str, _: None = Depends(_auth_and_rate_limit)
+) -> JSONResponse:
+    """Return the extraction instructions for a given document type."""
+    try:
+        dt = DocumentType(doc_type)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown doc_type")
+    instructions = get_instructions_for_type(dt)
+    return JSONResponse(status_code=status.HTTP_200_OK, content={"doc_type": dt.value, "instructions": instructions})

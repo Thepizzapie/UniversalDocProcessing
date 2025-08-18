@@ -510,7 +510,48 @@ We welcome contributions!
 
 ## License
 
-Apache-2.0 - see `LICENSE`.
+MIT - see `LICENSE`.
+
+## Security & Authentication
+
+- Bearer token support is built-in (set `ALLOWED_TOKENS` in `.env`).
+- For OAuth2/OpenID Connect, place a reverse proxy (e.g. NGINX, API Gateway) in front of this service to validate tokens and forward authenticated requests with a `Bearer` token header. Provide examples in deployment configs.
+- Distributed rate limiting: set `REDIS_URL` to enable Redis-backed per-IP limits. For multi-region or Kubernetes, use a global Redis/ElastiCache or API Gateway rate-limiting.
+
+## OCR Integration (How-To)
+
+If the vision-only approach struggles with certain scans, you can enable OCR.
+
+1) Install OCR dependencies
+```bash
+# Ubuntu/Debian
+sudo apt-get install tesseract-ocr poppler-utils
+
+# macOS
+brew install tesseract poppler
+
+# Windows
+# Tesseract: https://github.com/UB-Mannheim/tesseract/wiki
+# Poppler:   https://github.com/oschwartz10612/poppler-windows
+```
+
+2) Configure OCR in `.env`
+```env
+OCR_ENABLED=true
+TESSERACT_CMD=/usr/bin/tesseract   # or Windows path
+POPPLER_PATH=/usr/local/bin        # where pdfimages/pdftoppm live
+```
+
+3) Pipeline hook (example)
+```python
+from document_processing.ocr import to_text  # implement a helper that uses pytesseract/pdfminer
+
+text = to_text(file_path)  # use when OCR_ENABLED is true before calling classification
+```
+
+4) Troubleshooting
+- Ensure the binaries are on PATH.
+- For PDFs, convert to images before OCR or use pdfminer.
 
 ---
 
