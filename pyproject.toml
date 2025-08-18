@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "document-ai-framework"
+version = "1.0.0"
+description = "Production-ready AI-powered document classification and extraction framework"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+authors = [{name = "Document AI Framework", email = "contact@example.com"}]
+dependencies = []
+
+[project.urls]
+Homepage = "https://example.com"
+Repository = "https://example.com/repo"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["document_processing*", "service*", "sdk*"]
+[tool.black]
+line-length = 100
+target-version = ['py311']
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = [
+  ".venv",
+]
+
+[tool.ruff.lint]
+select = [
+  "E", "F",
+]
+ignore = ["I001"]  # Disable import sorting due to CI/local inconsistency
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+

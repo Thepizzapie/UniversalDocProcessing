@@ -1,0 +1,25 @@
+# Core document processing framework
+openai>=1.30.0
+pillow>=11.3.0
+pypdf>=4.0.0
+python-dotenv>=1.0
+pydantic>=2
+
+# Production-ready API service
+fastapi>=0.110
+uvicorn[standard]>=0.22
+httpx>=0.25
+python-multipart>=0.0.9
+
+# AI agents (optional - framework falls back to direct OpenAI if not available)
+# Note: CrewAI has dependency conflicts, making it truly optional
+# crewai>=0.28.0
+langchain>=0.1.14
+langchain-openai>=0.1.0
+
+# Optional distributed rate limiter
+redis>=5.0.4
+
+# OCR support (optional - framework is AI-first)
+pytesseract>=0.3.10
+pdf2image>=1.16

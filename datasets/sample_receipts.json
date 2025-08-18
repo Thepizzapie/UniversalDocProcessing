@@ -1,0 +1,32 @@
+[
+  {
+    "file_name": "receipt_001.pdf",
+    "expected_output": {
+      "classification": {
+        "type": "receipt",
+        "confidence": 0.90
+      },
+      "data": {
+        "store_name": "Store A",
+        "date": "2025-08-10",
+        "total": "50.00",
+        "currency": "USD"
+      }
+    }
+  },
+  {
+    "file_name": "receipt_002.pdf",
+    "expected_output": {
+      "classification": {
+        "type": "receipt",
+        "confidence": 0.88
+      },
+      "data": {
+        "store_name": "Store B",
+        "date": "2025-08-12",
+        "total": "75.00",
+        "currency": "USD"
+      }
+    }
+  }
+]
