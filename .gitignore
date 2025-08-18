@@ -101,7 +101,6 @@ demo_web/
 
 # Developer utilities not needed by client
 scripts/
-sdk/
 requirements.minimal.txt
 setup.py
 setup.bat

@@ -21,7 +21,7 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["document_processing*", "service*", "sdk*"]
+include = ["document_processing*", "service*", "sdk*", "mcp*"]
 [tool.black]
 line-length = 100
 target-version = ['py311']

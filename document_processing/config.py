@@ -54,6 +54,17 @@ class Config:
         self.doc_api_base_url = os.environ.get("DOC_API_BASE_URL", "http://127.0.0.1:8080")
         self.doc_api_token = os.environ.get("DOC_API_TOKEN")
 
+        # Optional MCP (Model Context Protocol) integration
+        self.enable_mcp = os.environ.get("ENABLE_MCP", "false").lower() in {"1", "true", "yes"}
+        self.mcp_server_cmd = os.environ.get("MCP_SERVER_CMD", "")
+        self.mcp_server_args = os.environ.get("MCP_SERVER_ARGS", "")
+        self.allowlist_tools = [
+            t.strip() for t in os.environ.get("ALLOWLIST_TOOLS", "").split(",") if t.strip()
+        ]
+        self.blocklist_tools = [
+            t.strip() for t in os.environ.get("BLOCKLIST_TOOLS", "").split(",") if t.strip()
+        ]
+
     def validate(self) -> Dict[str, Any]:
         """Validate configuration and return validation results.
 

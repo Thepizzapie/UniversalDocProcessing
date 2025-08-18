@@ -186,6 +186,13 @@ ALLOW_FILE_URLS=true                              # Allow processing from URLs
 
 # Optional: Distributed Rate Limiting
 REDIS_URL=redis://localhost:6379                  # Redis for distributed rate limiting
+
+# Optional: MCP Server Integration
+ENABLE_MCP=false                                 # Enable MCP integration
+# MCP_SERVER_CMD=/path/to/mcp_server            # Command to start MCP server
+# MCP_SERVER_ARGS=--port 9000                   # Arguments for MCP server command
+# ALLOWLIST_TOOLS=tool1,tool2                  # Optional tool allowlist
+# BLOCKLIST_TOOLS=tool3,tool4                  # Optional tool blocklist
 ```
 
 ## Document Type Configuration (JSON)

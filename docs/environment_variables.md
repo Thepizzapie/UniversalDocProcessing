@@ -14,9 +14,15 @@ This document lists all environment variables used in the Document AI Framework.
 - `ALLOW_FILE_URLS`: Whether to allow file URLs for document processing.
 - `REQUIRE_AUTH`: Whether authentication is required for API endpoints.
 - `ALLOWED_TOKENS`: List of bearer tokens allowed for authentication.
+- `ENABLE_MCP`: Enable Model Context Protocol server integration (default: `false`).
+- `MCP_SERVER_CMD`: Command to start the MCP server when `ENABLE_MCP` is true.
+- `MCP_SERVER_ARGS`: Arguments passed to the MCP server command.
+- `ALLOWLIST_TOOLS`: Comma-separated list of MCP tools to allow.
+- `BLOCKLIST_TOOLS`: Comma-separated list of MCP tools to block.
 
 ## Default Values
 
 - `MAX_FILE_SIZE_MB`: Default is 10 MB.
 - `MODEL_NAME`: Default is `gpt-3.5-turbo`.
 - `VISION_MODEL_NAME`: Default is `vision-model`.
+- `ENABLE_MCP`: Default is `false`.

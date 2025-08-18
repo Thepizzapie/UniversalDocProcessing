@@ -47,8 +47,12 @@ def main():
         # Start the document processing API service
         logger.info("Starting Document AI Framework API...")
         import uvicorn
+        from mcp.client import start_mcp_server
 
-        uvicorn.run("service.api:app", host="127.0.0.1", port=8080, reload=False, log_level="info")
+        with start_mcp_server():
+            uvicorn.run(
+                "service.api:app", host="127.0.0.1", port=8080, reload=False, log_level="info"
+            )
 
     except KeyboardInterrupt:
         logger.info("Service stopped by user.")
