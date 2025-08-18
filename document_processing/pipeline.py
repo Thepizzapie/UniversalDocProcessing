@@ -247,10 +247,15 @@ def run_pipeline(
     if ocr_fallback and (not isinstance(data, dict) or not data):
         data = {"raw_text": text[:1000] if text else ""}
 
+    # Build structured result with clearer error semantics
     result = {
         "classification": classification.dict(),
         "data": data,
     }
+    if classification.confidence == 0.0 and not _is_meaningful(data):
+        # Provide explicit failure code for clients
+        result.setdefault("errors", []).append("E_NO_CONFIDENCE_NO_DATA")
+        result.setdefault("message", "Classification confidence is zero and no fields were extracted")
     if return_text:
         result["raw_text"] = text
     if errors:
