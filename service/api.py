@@ -566,6 +566,7 @@ async def classify_extract_batch(
 
 # --- Document Types Management (read-only) -----------------------------------
 
+
 @app.get("/doc-types")
 async def list_document_types(_: None = Depends(_auth_and_rate_limit)) -> JSONResponse:
     """Return the list of supported document types.
@@ -577,16 +578,12 @@ async def list_document_types(_: None = Depends(_auth_and_rate_limit)) -> JSONRe
 
 
 @app.get("/doc-types/{doc_type}")
-async def get_document_type(
-    doc_type: str, _: None = Depends(_auth_and_rate_limit)
-) -> JSONResponse:
+async def get_document_type(doc_type: str, _: None = Depends(_auth_and_rate_limit)) -> JSONResponse:
     """Return the extraction instructions for a given document type."""
     try:
         dt = DocumentType(doc_type)
     except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Unknown doc_type"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown doc_type")
     instructions = get_instructions_for_type(dt)
     return JSONResponse(
         status_code=status.HTTP_200_OK,
