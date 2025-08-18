@@ -5,7 +5,7 @@ Thank you for your interest in contributing! We welcome issues, discussions, and
 ## Development Setup
 - Create and activate a virtual environment
 - Install dependencies: `pip install -r requirements.txt`
-- Configure environment: `cp env.example .env` and add your OpenAI API key
+- Configure environment: `cp config/env.example .env` and add your OpenAI API key
 - Run the framework: `python main.py`
 - Test the API: `curl http://localhost:8080/health`
 - Run tests: `pytest -q` (if test suite is available)
