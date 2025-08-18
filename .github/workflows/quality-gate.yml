@@ -1,0 +1,61 @@
+name: Quality Gate
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  quality-check:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.11
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov
+    
+    - name: Run full test suite
+      env:
+        OPENAI_API_KEY: sk-test-key-for-ci
+        PYTHONPATH: .
+      run: |
+        pytest tests/ --cov=document_processing --cov=service --cov=sdk --cov-report=xml --cov-fail-under=40
+    
+    - name: Check test coverage threshold
+      run: |
+        echo "Coverage threshold check passed"
+    
+    - name: Validate configuration
+      run: |
+        python -c "from document_processing.config import Config; c = Config(); print('Config validation structure OK')"
+    
+    - name: Test API endpoints
+      run: |
+        python -c "from service.api import app; print('API app creation OK')"
+    
+    - name: Test SDK client
+      run: |
+        python -c "from sdk.client import DocAI; client = DocAI('http://test'); print('SDK client creation OK')"
+
+  changelog-check:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.base.ref == 'main'
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Check for changelog entry
+      run: |
+        if [ ! -f CHANGELOG.md ]; then
+          echo "::warning::No CHANGELOG.md found. Consider adding one for better release tracking."
+        else
+          echo "Changelog exists"
+        fi
