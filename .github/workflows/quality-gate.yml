@@ -26,6 +26,7 @@ jobs:
     - name: Run full test suite
       env:
         OPENAI_API_KEY: sk-test-key-for-ci
+        PYTHONPATH: .
       run: |
         pytest tests/ --cov=document_processing --cov=service --cov=sdk --cov-report=xml --cov-fail-under=40
     
