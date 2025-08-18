@@ -7,7 +7,7 @@ CrewAI-based agents for document classification and extraction.
 This module defines thin wrappers around CrewAI agents to:
 
 1) Classify document OCR text into a known type defined in
-   ``config/doc_types.yaml``.
+   ``config/doc_types.json``.
 2) Extract structured fields according to type-specific instructions.
 
 These helpers gracefully fall back to the existing LangChain-only
