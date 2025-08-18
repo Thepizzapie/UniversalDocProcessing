@@ -34,7 +34,7 @@ jobs:
     
     - name: Lint with ruff
       run: |
-        pip install ruff
+        pip install ruff==0.12.9
         ruff check .
     
     - name: Format check with black
