@@ -16,6 +16,9 @@
 ### 1) Install dependencies
 ```bash
 pip install -r requirements.txt
+
+# Optional: Install CrewAI for advanced agent functionality (may have dependency conflicts)
+# pip install -r requirements-crewai.txt
 ```
 
 ### 2) Configure environment

@@ -23,7 +23,7 @@ jobs:
     
     - name: Run tests
       env:
-        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'sk-test-key-for-ci' }}
+        OPENAI_API_KEY: sk-test-key-for-ci
       run: |
         pip install pytest
         pytest tests/

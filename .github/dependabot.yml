@@ -6,8 +6,6 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
-    reviewers:
-      - "Thepizzapie"
     commit-message:
       prefix: "deps"
       prefix-development: "deps-dev"
@@ -19,8 +17,6 @@ updates:
     schedule:
       interval: "monthly"
     open-pull-requests-limit: 5
-    reviewers:
-      - "Thepizzapie"
     commit-message:
       prefix: "ci"
       include: "scope"
@@ -31,5 +27,3 @@ updates:
     schedule:
       interval: "monthly"
     open-pull-requests-limit: 5
-    reviewers:
-      - "Thepizzapie"

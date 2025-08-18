@@ -12,7 +12,8 @@ httpx>=0.25
 python-multipart>=0.0.9
 
 # AI agents (optional - framework falls back to direct OpenAI if not available)
-crewai>=0.28.0
+# Note: CrewAI has dependency conflicts, making it truly optional
+# crewai>=0.28.0
 langchain>=0.1.14
 langchain-openai>=0.1.0
 
