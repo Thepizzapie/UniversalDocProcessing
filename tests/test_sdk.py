@@ -5,8 +5,8 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-import pytest
-from sdk.client import DocAI
+import pytest  # noqa: E402
+from sdk.client import DocAI  # noqa: E402
 
 
 def test_sync_client_requires_input():
