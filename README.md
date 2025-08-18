@@ -427,7 +427,7 @@ document_ai_framework/
 │
 ├── docs/                    # Documentation
 │   ├── CODE_OF_CONDUCT.md   # Community standards
-│   └── LICENSE              # Apache-2.0 license
+│   └── LICENSE              # MIT license
 │
 ├── .github/                 # CI/CD workflows
 │   ├── workflows/           # GitHub Actions
