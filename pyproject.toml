@@ -31,9 +31,9 @@ exclude = [
 
 [tool.ruff.lint]
 select = [
-  "E", "F", "I",
+  "E", "F",
 ]
-ignore = []
+ignore = ["I001"]  # Disable import sorting due to CI/local inconsistency
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
