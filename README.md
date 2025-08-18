@@ -18,11 +18,11 @@
 pip install -r requirements.txt
 
 # Optional: Install CrewAI for advanced agent functionality (may have dependency conflicts)
-# pip install -r requirements-crewai.txt
+# pip install -r config/requirements-crewai.txt
 ```
 
 ### 2) Configure environment
-Create a `.env` file (see `.env.example` below):
+Create a `.env` file (see `config/env.example`):
 ```env
 OPENAI_API_KEY=sk-your-key-here
 MODEL_NAME=gpt-5
@@ -397,7 +397,7 @@ Update `pipeline.py` to enable OCR text extraction before vision processing.
 ## Project Structure
 
 ```
-doc_ai_project/
+document_ai_framework/
 │
 ├── document_processing/     # Core AI processing logic
 │   ├── config/
@@ -421,11 +421,22 @@ doc_ai_project/
 │   ├── test_pipeline.py     # Pipeline tests
 │   └── test_sdk.py          # SDK tests
 │
+├── config/                  # Configuration files
+│   ├── env.example          # Environment variable template
+│   └── requirements-crewai.txt # Optional CrewAI dependencies
+│
+├── docs/                    # Documentation
+│   ├── CODE_OF_CONDUCT.md   # Community standards
+│   └── LICENSE              # Apache-2.0 license
+│
+├── .github/                 # CI/CD workflows
+│   ├── workflows/           # GitHub Actions
+│   └── dependabot.yml       # Dependency automation
+│
 ├── Dockerfile               # Container definition
-├── requirements.txt         # Python dependencies
-├── pyproject.toml           # Packaging metadata
-├── env.example              # Environment variable template
-├── LICENSE                  # Apache-2.0 license
+├── requirements.txt         # Core dependencies
+├── pyproject.toml           # Package metadata
+├── README.md                # Main documentation
 └── main.py                  # Entry point
 ```
 
