@@ -201,7 +201,7 @@ def extract_with_agent(
 
     allowlist_tools = []
     blocklist_tools = []
-    
+
     if ENABLE_MCP:
         mcp_server_cmd = os.getenv("MCP_SERVER_CMD", "")
         mcp_server_args = os.getenv("MCP_SERVER_ARGS", "")
@@ -225,13 +225,13 @@ def extract_with_agent(
     )
 
     # Only set these attributes if they exist and have values
-    if allowlist_tools and allowlist_tools != ['']:
+    if allowlist_tools and allowlist_tools != [""]:
         try:
             extractor.allowlist_tools = allowlist_tools
         except (AttributeError, ValueError):
             # Agent doesn't support allowlist_tools, skip
             pass
-    if blocklist_tools and blocklist_tools != ['']:
+    if blocklist_tools and blocklist_tools != [""]:
         try:
             extractor.blocklist_tools = blocklist_tools
         except (AttributeError, ValueError):
