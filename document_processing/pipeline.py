@@ -255,7 +255,13 @@ def run_pipeline(
     if classification.confidence == 0.0 and not _is_meaningful(data):
         # Provide explicit failure code for clients
         result.setdefault("errors", []).append("E_NO_CONFIDENCE_NO_DATA")
-        result.setdefault("message", "Classification confidence is zero and no fields were extracted")
+        result.setdefault(
+            "message",
+            (
+                "Classification confidence is zero and no fields were "
+                "extracted"
+            ),
+        )
     if return_text:
         result["raw_text"] = text
     if errors:

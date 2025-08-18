@@ -47,10 +47,10 @@ from fastapi.responses import JSONResponse
 load_dotenv()
 
 from document_processing.config import get_config, validate_config  # noqa: E402
-from document_processing.doc_classifier import (
+from document_processing.doc_classifier import (  # noqa: E402
     DocumentType,
     get_instructions_for_type,
-)  # noqa: E402
+)
 from document_processing.pipeline import run_pipeline  # noqa: E402
 
 # Configure basic logging
@@ -584,6 +584,14 @@ async def get_document_type(
     try:
         dt = DocumentType(doc_type)
     except Exception:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown doc_type")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Unknown doc_type"
+        )
     instructions = get_instructions_for_type(dt)
-    return JSONResponse(status_code=status.HTTP_200_OK, content={"doc_type": dt.value, "instructions": instructions})
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "doc_type": dt.value,
+            "instructions": instructions,
+        },
+    )
