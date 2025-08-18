@@ -6,11 +6,11 @@ This module provides a function to classify a piece of text into one of
 several predefined document types.  It leverages a large language model
 from OpenAI via LangChain to perform the classification, returning both
 the predicted type and a confidence score.  The available document types
-and their extraction instructions are defined in ``config/doc_types.yaml``.
+and their extraction instructions are defined in ``config/doc_types.json``.
 
 The classifier exposes two utilities:
 
-* ``load_doc_types`` reads the YAML configuration file and returns a
+* ``load_doc_types`` reads the JSON configuration file and returns a
   mapping of document type keys to descriptions and instructions.
 * ``classify_document`` sends the document text to an LLM and asks it to
   choose the most appropriate type from the allowed list.  The result is
@@ -54,7 +54,7 @@ __all__ = [
 
 class DocumentType(str, Enum):
     """Enumeration of supported document types.  The member names must
-    match the keys defined in ``doc_types.yaml``.
+    match the keys defined in ``doc_types.json``.
     """
 
     INVOICE = "invoice"
@@ -74,11 +74,11 @@ class ClassificationResult(BaseModel):
 
 
 def load_doc_types(config_path: Optional[Path] = None) -> Dict[str, Dict[str, str]]:
-    """Load the document types configuration from a YAML file.
+    """Load the document types configuration from a JSON file.
 
     Args:
-        config_path: Optional path to the YAML config.  If omitted it
-            defaults to ``document_processing/config/doc_types.yaml`` relative
+        config_path: Optional path to the JSON config.  If omitted it
+            defaults to ``document_processing/config/doc_types.json`` relative
             to this module.
 
     Returns:
