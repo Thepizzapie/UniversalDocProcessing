@@ -1,0 +1,32 @@
+[
+  {
+    "file_name": "po_001.pdf",
+    "expected_output": {
+      "classification": {
+        "type": "purchase_order",
+        "confidence": 0.93
+      },
+      "data": {
+        "po_number": "PO-001",
+        "date": "2025-08-15",
+        "total": "2000.00",
+        "currency": "USD"
+      }
+    }
+  },
+  {
+    "file_name": "po_002.pdf",
+    "expected_output": {
+      "classification": {
+        "type": "purchase_order",
+        "confidence": 0.91
+      },
+      "data": {
+        "po_number": "PO-002",
+        "date": "2025-08-16",
+        "total": "1500.00",
+        "currency": "USD"
+      }
+    }
+  }
+]

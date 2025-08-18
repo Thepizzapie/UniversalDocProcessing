@@ -555,4 +555,45 @@ text = to_text(file_path)  # use when OCR_ENABLED is true before calling classif
 
 ---
 
-**Ready to transform your document processing?** Get started in 5 minutes!
+
+
+## MCP Integration
+
+### Enabling MCP Connections
+
+The framework supports integration with MCP servers for tool discovery and execution. By default, MCP connections are disabled, and agents run independently. To enable MCP connections:
+
+1. Update the `.env` file:
+
+```env
+ENABLE_MCP=true
+MCP_SERVER_CMD=your-mcp-server-command
+MCP_SERVER_ARGS=your-mcp-server-arguments
+ALLOWLIST_TOOLS=tool1,tool2
+BLOCKLIST_TOOLS=tool3,tool4
+```
+
+2. Restart the service:
+
+```bash
+python main.py
+```
+
+### Using MCP Tools
+
+When MCP is enabled, agents can discover and use tools provided by the MCP server. Tool filtering can be configured using allowlists and blocklists in the `.env` file.
+
+### Example
+
+```python
+from document_processing.agents import extract_with_agent
+
+# Enable MCP in the environment
+os.environ["ENABLE_MCP"] = "true"
+os.environ["MCP_SERVER_CMD"] = "mock_mcp_server"
+os.environ["MCP_SERVER_ARGS"] = "--mock-args"
+
+# Run extraction with MCP tools
+result = extract_with_agent("Sample text", "Sample instructions")
+print(result)
+```

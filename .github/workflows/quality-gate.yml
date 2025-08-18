@@ -43,6 +43,8 @@ jobs:
         python -c "from service.api import app; print('API app creation OK')"
     
     - name: Test SDK client
+      env:
+        PYTHONPATH: .
       run: |
         python -c "import sys; sys.path.insert(0, '.'); from sdk.client import DocAI; DocAI('http://test'); print('SDK client creation OK')"
 

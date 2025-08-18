@@ -18,6 +18,7 @@ execution fails for any reason, ensuring robustness in production.
 from __future__ import annotations
 
 import json
+import os
 from typing import Any, Dict, List, Optional
 
 from langchain_openai import ChatOpenAI
@@ -194,6 +195,22 @@ def extract_with_agent(
 
     llm = _default_llm(temperature=1.0, max_tokens=1200)
 
+    # Load MCP configuration from environment variables
+    ENABLE_MCP = os.getenv("ENABLE_MCP", "false").lower() == "true"
+    mcp_servers: List[str] = []
+
+    allowlist_tools = []
+    blocklist_tools = []
+    
+    if ENABLE_MCP:
+        mcp_server_cmd = os.getenv("MCP_SERVER_CMD", "")
+        mcp_server_args = os.getenv("MCP_SERVER_ARGS", "")
+        allowlist_tools = os.getenv("ALLOWLIST_TOOLS", "").split(",")
+        blocklist_tools = os.getenv("BLOCKLIST_TOOLS", "").split(",")
+
+        if mcp_server_cmd:
+            mcp_servers.append(f"{mcp_server_cmd} {mcp_server_args}")
+
     extractor = Agent(
         role="Information Extraction Specialist",
         goal="Produce a strictly valid JSON object following the provided instructions.",
@@ -204,7 +221,22 @@ def extract_with_agent(
         llm=llm,
         allow_delegation=False,
         verbose=False,
+        mcp_servers=mcp_servers,  # Pass MCP servers here
     )
+
+    # Only set these attributes if they exist and have values
+    if allowlist_tools and allowlist_tools != ['']:
+        try:
+            extractor.allowlist_tools = allowlist_tools
+        except (AttributeError, ValueError):
+            # Agent doesn't support allowlist_tools, skip
+            pass
+    if blocklist_tools and blocklist_tools != ['']:
+        try:
+            extractor.blocklist_tools = blocklist_tools
+        except (AttributeError, ValueError):
+            # Agent doesn't support blocklist_tools, skip
+            pass
 
     truncated_text = text[:max_output_chars]
 

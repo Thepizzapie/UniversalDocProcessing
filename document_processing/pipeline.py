@@ -25,8 +25,10 @@ directly into other Python code for programmatic use.
 
 from __future__ import annotations
 
+import json
 import logging
 import tempfile
+import time
 from pathlib import Path
 from typing import Dict, Optional, Union
 
@@ -105,6 +107,13 @@ def run_pipeline(
 
     errors = []
 
+    def json_log(message: str, **kwargs):
+        """Log messages in JSON format."""
+        logger.info(json.dumps({"message": message, **kwargs}))
+
+    json_log("pipeline:start processing document", step="start")
+    start_time = time.time()
+
     # Step 1: No OCR – AI-only pipeline
     text = ""
 
@@ -155,7 +164,7 @@ def run_pipeline(
                 classification.confidence = min(classification.confidence, 0.2)
         except Exception as err:
             logger.exception("pipeline: classification failed: %s", err)
-            errors.append(f"classification_failed: {err}")
+            errors.append({"code": "E_CLASSIFICATION_FAILED", "message": str(err)})
             classification = ClassificationResult(type=DocumentType.OTHER, confidence=0.0)
     logger.info(
         "pipeline:finished step=classify type=%s conf=%.3f",
@@ -197,7 +206,7 @@ def run_pipeline(
                 logger.warning("pipeline: vision extraction returned no data")
         except Exception as vision_err:
             logger.exception("pipeline: vision fallback failed: %s", vision_err)
-            errors.append(f"vision_fallback_failed: {vision_err}")
+            errors.append({"code": "E_VISION_FALLBACK_FAILED", "message": str(vision_err)})
     else:
         # Try text extraction first
         try:
@@ -213,7 +222,7 @@ def run_pipeline(
         except Exception as err:
             logger.exception("pipeline: text extraction failed: %s", err)
             data = {}
-            errors.append(f"extraction_failed: {err}")
+            errors.append({"code": "E_EXTRACTION_FAILED", "message": str(err)})
 
         # Vision fallback when extracted JSON has no meaningful values
         if not _is_meaningful(data) and tmp_path.exists():
@@ -230,7 +239,7 @@ def run_pipeline(
                     logger.warning("pipeline: vision fallback returned no meaningful data")
             except Exception as vision_err:
                 logger.exception("pipeline: vision fallback failed: %s", vision_err)
-                errors.append(f"vision_fallback_failed: {vision_err}")
+                errors.append({"code": "E_VISION_FALLBACK_FAILED", "message": str(vision_err)})
     logger.info("pipeline:finished step=extract has_data=%s", _is_meaningful(data))
 
     # Optional refinement pass
@@ -254,7 +263,12 @@ def run_pipeline(
     }
     if classification.confidence == 0.0 and not _is_meaningful(data):
         # Provide explicit failure code for clients
-        result.setdefault("errors", []).append("E_NO_CONFIDENCE_NO_DATA")
+        result.setdefault("errors", []).append(
+            {
+                "code": "E_NO_CONFIDENCE_NO_DATA",
+                "message": ("Classification confidence is zero and no fields were " "extracted"),
+            }
+        )
         result.setdefault(
             "message",
             ("Classification confidence is zero and no fields were " "extracted"),
@@ -264,6 +278,10 @@ def run_pipeline(
     if errors:
         result["errors"] = errors
 
+    end_time = time.time()
+    processing_time = end_time - start_time
+    json_log("pipeline:end processing document", step="end", processing_time=processing_time)
+
     # Clean up temporary file if we created one
     if file is not None:
         try:
@@ -272,3 +290,10 @@ def run_pipeline(
             pass
 
     return result
+
+
+def post_extraction_hook(data: dict) -> dict:
+    """Example hook for custom business logic after extraction."""
+    # Example: Map fields to database models
+    mapped_data = {key.upper(): value for key, value in data.items()}
+    return mapped_data

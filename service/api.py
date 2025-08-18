@@ -42,6 +42,7 @@ import httpx
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile, status
 from fastapi.responses import JSONResponse
+from fastapi.security import OAuth2PasswordBearer
 
 # Load environment variables first
 load_dotenv()
@@ -218,6 +219,9 @@ async def _auth_and_rate_limit(
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
 
+# Define OAuth2 scheme
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
+
 app = FastAPI(title="Document AI Service", version="1.0.0")
 
 
@@ -328,6 +332,23 @@ async def get_metrics() -> JSONResponse:
     )
 
 
+@app.get("/metrics")
+async def metrics_endpoint() -> JSONResponse:
+    """Expose pipeline metrics for monitoring."""
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "metrics": {
+                "total_requests": _service_metrics["total_requests"],
+                "successful_requests": _service_metrics["successful_requests"],
+                "failed_requests": _service_metrics["failed_requests"],
+                "documents_processed": _service_metrics["documents_processed"],
+                "average_processing_time_ms": _service_metrics["average_processing_time_ms"],
+            }
+        },
+    )
+
+
 async def _process_and_callback(
     file_bytes: Optional[bytes],
     file_path: Optional[str],
@@ -375,6 +396,22 @@ async def _process_and_callback(
             await client.post(callback_url, json=result, timeout=30.0)
     except Exception as e:
         logger.exception("Error processing document in background: %s", e)
+
+
+@app.post("/token")
+async def token_endpoint(username: str = Form(...), password: str = Form(...)):
+    """Mock token endpoint for OAuth2 authentication."""
+    if username == "admin" and password == "password":
+        return {"access_token": "mock_token", "token_type": "bearer"}
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+
+@app.get("/secure-endpoint")
+async def secure_endpoint(token: str = Depends(oauth2_scheme)):
+    """Example secure endpoint requiring OAuth2 authentication."""
+    if token != "mock_token":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    return {"message": "Secure data"}
 
 
 @app.post("/classify-extract")
