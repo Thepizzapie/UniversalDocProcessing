@@ -92,7 +92,8 @@ def identify_profile_with_agent(text: str) -> Dict[str, Any]:
             " likely fields present, and structural hints."
         ),
         backstory=(
-            "You examine business documents and summarize their structure. Output strictly valid JSON."
+            "You examine business documents and summarize their structure. "
+            "Output strictly valid JSON."
         ),
         llm=llm,
         allow_delegation=False,
@@ -102,10 +103,12 @@ def identify_profile_with_agent(text: str) -> Dict[str, Any]:
     task = Task(
         description=(
             "Given the following OCR text, output a JSON object with keys:"
-            " {type_hint, likely_fields, confidence_hints}.\n"
-            "OCR text:\n{text}"
-        ).format(text=text[:3000]),
-        expected_output='{"type_hint": "...", "likely_fields": ["..."], "confidence_hints": ["..."]}',
+            " type_hint, likely_fields, confidence_hints.\n"
+            f"OCR text:\n{text[:3000]}"
+        ),
+        expected_output=(
+            '{"type_hint": "...", "likely_fields": ["..."], "confidence_hints": ["..."]}'
+        ),
         agent=identifier,
     )
 
@@ -116,6 +119,7 @@ def identify_profile_with_agent(text: str) -> Dict[str, Any]:
         return json.loads(content)
     except Exception:
         return {"type_hint": "other", "likely_fields": [], "confidence_hints": []}
+
 
 def classify_with_agent(
     text: str, allowed_types: Optional[List[DocumentType]] = None

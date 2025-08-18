@@ -35,7 +35,7 @@ import time
 from collections import defaultdict, deque
 from datetime import datetime
 from ipaddress import ip_address, ip_network
-from typing import Dict, Optional
+from typing import Optional
 from urllib.parse import urlparse
 
 import httpx
@@ -230,9 +230,9 @@ async def health_check() -> JSONResponse:
         if not config.openai_api_key:
             return JSONResponse(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                content={"status": "unhealthy", "reason": "OpenAI API key not configured"}
+                content={"status": "unhealthy", "reason": "OpenAI API key not configured"},
             )
-        
+
         # Check Redis connection if configured
         if _redis:
             try:
@@ -240,9 +240,9 @@ async def health_check() -> JSONResponse:
             except Exception:
                 return JSONResponse(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    content={"status": "unhealthy", "reason": "Redis connection failed"}
+                    content={"status": "unhealthy", "reason": "Redis connection failed"},
                 )
-        
+
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content={
@@ -250,13 +250,17 @@ async def health_check() -> JSONResponse:
                 "service": "Document AI Framework",
                 "version": "1.0.0",
                 "timestamp": datetime.utcnow().isoformat(),
-                "uptime_seconds": int((datetime.utcnow() - datetime.fromisoformat(_service_metrics["start_time"])).total_seconds()),
-            }
+                "uptime_seconds": int(
+                    (
+                        datetime.utcnow() - datetime.fromisoformat(_service_metrics["start_time"])
+                    ).total_seconds()
+                ),
+            },
         )
     except Exception as e:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={"status": "unhealthy", "reason": str(e)}
+            content={"status": "unhealthy", "reason": str(e)},
         )
 
 
@@ -268,9 +272,11 @@ async def get_metrics() -> JSONResponse:
         _service_metrics["average_processing_time_ms"] = (
             _service_metrics["total_processing_time_ms"] / _service_metrics["documents_processed"]
         )
-    
-    uptime_seconds = int((datetime.utcnow() - datetime.fromisoformat(_service_metrics["start_time"])).total_seconds())
-    
+
+    uptime_seconds = int(
+        (datetime.utcnow() - datetime.fromisoformat(_service_metrics["start_time"])).total_seconds()
+    )
+
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
@@ -285,7 +291,7 @@ async def get_metrics() -> JSONResponse:
                     "max_file_size_mb": config.max_file_size_mb,
                     "model_name": config.model_name,
                     "vision_model_name": config.vision_model_name,
-                }
+                },
             },
             "request_metrics": {
                 "total_requests": _service_metrics["total_requests"],
@@ -293,7 +299,8 @@ async def get_metrics() -> JSONResponse:
                 "failed_requests": _service_metrics["failed_requests"],
                 "success_rate": (
                     _service_metrics["successful_requests"] / _service_metrics["total_requests"]
-                    if _service_metrics["total_requests"] > 0 else 0
+                    if _service_metrics["total_requests"] > 0
+                    else 0
                 ),
             },
             "processing_metrics": {
@@ -303,11 +310,15 @@ async def get_metrics() -> JSONResponse:
                 "document_types_processed": dict(_service_metrics["document_types_processed"]),
             },
             "system_metrics": {
-                "active_connections": len(_processing_semaphore._waiters) if hasattr(_processing_semaphore, '_waiters') else 0,
+                "active_connections": (
+                    len(_processing_semaphore._waiters)
+                    if hasattr(_processing_semaphore, "_waiters")
+                    else 0
+                ),
                 "available_slots": _processing_semaphore._value,
                 "redis_connected": _redis is not None,
-            }
-        }
+            },
+        },
     )
 
 
@@ -381,7 +392,7 @@ async def classify_extract(
     """
     # Track request metrics
     _service_metrics["total_requests"] += 1
-    
+
     if file is None and not file_url:
         _service_metrics["failed_requests"] += 1
         raise HTTPException(
@@ -466,17 +477,17 @@ async def classify_extract(
                 bool(ocr_fallback),
             )
         duration_ms = int((_now() - start) * 1000)
-        
+
         # Update metrics
         _service_metrics["successful_requests"] += 1
         _service_metrics["documents_processed"] += 1
         _service_metrics["total_processing_time_ms"] += duration_ms
-        
+
         # Track document type if available
         if result.get("classification", {}).get("type"):
             doc_type_processed = result["classification"]["type"]
             _service_metrics["document_types_processed"][doc_type_processed] += 1
-        
+
         logger.info(
             "processed document: use_agents=%s refine=%s bytes=%s duration_ms=%s type=%s",
             bool(use_agents),
@@ -506,7 +517,7 @@ async def classify_extract_batch(
     """
     # Track request metrics
     _service_metrics["total_requests"] += 1
-    
+
     if not files:
         _service_metrics["failed_requests"] += 1
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No files provided")
@@ -533,15 +544,15 @@ async def classify_extract_batch(
 
     async with _processing_semaphore:
         results = await asyncio.gather(*[_process_one(f) for f in files])
-    
+
     # Update batch metrics
     _service_metrics["successful_requests"] += 1
     _service_metrics["documents_processed"] += len(files)
-    
+
     # Track document types processed in batch
     for result in results:
         if result.get("classification", {}).get("type"):
             doc_type_processed = result["classification"]["type"]
             _service_metrics["document_types_processed"][doc_type_processed] += 1
-    
+
     return JSONResponse(status_code=status.HTTP_200_OK, content=results)

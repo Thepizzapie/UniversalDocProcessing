@@ -33,17 +33,17 @@ from typing import Dict, Optional, Union
 from .agents import (
     classify_with_agent,
     extract_with_agent,
-    refine_extraction_with_agent,
     identify_profile_with_agent,
+    refine_extraction_with_agent,
 )
 from .config import validate_config
 from .doc_classifier import (
     ClassificationResult,
     DocumentType,
-    get_instructions_for_type,
     classify_document,
-    classify_document_openai,
     classify_document_from_image,
+    classify_document_openai,
+    get_instructions_for_type,
 )
 from .doc_extractor import extract_fields, extract_fields_from_image
 
@@ -119,12 +119,11 @@ def run_pipeline(
             type=forced_enum, confidence=1.0
         )
     else:
-        # Identify a profile first
-        profile = {}
+        # Identify a profile first (currently unused but may be used in future)
         try:
-            profile = identify_profile_with_agent(text or "") if use_agents else {}
+            identify_profile_with_agent(text or "") if use_agents else {}
         except Exception:
-            profile = {}
+            pass
 
         # Classify using OCR text / profile.
         try:
@@ -141,6 +140,7 @@ def run_pipeline(
                 else:
                     # For gpt-5, prefer direct OpenAI client to avoid LangChain max_tokens usage
                     from .config import get_config as _gc
+
                     if (_gc().model_name or "").lower() == "gpt-5":
                         classification = classify_document_openai(text or "")
                     else:

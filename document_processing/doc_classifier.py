@@ -109,7 +109,8 @@ def get_instructions_for_type(doc_type: DocumentType) -> str:
         schema = instr.get("schema", {})
         guidelines = instr.get("guidelines", [])
         lines = [
-            "Extract the following fields and return ONLY a valid JSON object with exactly these keys:",
+            "Extract the following fields and return ONLY a valid JSON object "
+            "with exactly these keys:",
             "{",
         ]
         for key, desc in schema.items():
@@ -232,7 +233,7 @@ def classify_document_openai(
         + allowed_list
         + "\n\nDocument text:\n"
         + text
-        + "\n\nRespond ONLY with JSON: {\"type\": <type>, \"confidence\": <0-1>}"
+        + '\n\nRespond ONLY with JSON: {"type": <type>, "confidence": <0-1>}'
     )
 
     resp = client.chat.completions.create(
@@ -267,9 +268,10 @@ def classify_document_from_image(
 
     Returns JSON {"type": <one of allowed>, "confidence": 0-1}.
     """
-    from openai import OpenAI  # local import
-    from pathlib import Path as _Path
     import base64 as _b64
+    from pathlib import Path as _Path
+
+    from openai import OpenAI  # local import
 
     cfg = get_config()
     client = OpenAI(api_key=cfg.openai_api_key, base_url=cfg.openai_api_base)
@@ -293,7 +295,7 @@ def classify_document_from_image(
     user_text = (
         "Allowed types: "
         + allowed_list
-        + "\nReturn only JSON {\"type\": <type>, \"confidence\": <0-1>}"
+        + '\nReturn only JSON {"type": <type>, "confidence": <0-1>}'
     )
 
     resp = client.chat.completions.create(
