@@ -12,10 +12,10 @@ jobs:
       with:
         fetch-depth: 0
     
-    - name: Set up Python
+    - name: Set up Python 3.12
       uses: actions/setup-python@v4
       with:
-        python-version: 3.11
+        python-version: "3.12"
     
     - name: Install dependencies
       run: |
@@ -44,7 +44,7 @@ jobs:
     
     - name: Test SDK client
       run: |
-        python -c "from sdk.client import DocAI; client = DocAI('http://test'); print('SDK client creation OK')"
+        python -c "import sys; sys.path.insert(0, '.'); from sdk.client import DocAI; DocAI('http://test'); print('SDK client creation OK')"
 
   changelog-check:
     runs-on: ubuntu-latest
