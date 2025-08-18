@@ -1,4 +1,4 @@
-from document_processing.doc_classifier import classify_document, DocumentType, ClassificationResult
+from document_processing.doc_classifier import ClassificationResult, DocumentType, classify_document
 
 
 class _FakeResponse:
@@ -31,4 +31,3 @@ def test_classify_document_fallback_on_bad_json():
     result = classify_document("text", model=_BadModel())
     assert result.type == DocumentType.OTHER
     assert result.confidence == 0.0
-

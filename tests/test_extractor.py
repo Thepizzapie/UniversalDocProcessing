@@ -21,4 +21,3 @@ def test_extract_fields_returns_dict():
     result = extract_fields("hello", "extract a and b", model=model)
     assert isinstance(result, dict)
     assert result.get("a") == 1
-

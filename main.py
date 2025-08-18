@@ -7,7 +7,6 @@ validation and error handling.
 """
 
 import logging
-import os
 import sys
 from pathlib import Path
 
@@ -49,9 +48,7 @@ def main():
         logger.info("Starting Document AI Framework API...")
         import uvicorn
 
-        uvicorn.run(
-            "service.api:app", host="127.0.0.1", port=8080, reload=False, log_level="info"
-        )
+        uvicorn.run("service.api:app", host="127.0.0.1", port=8080, reload=False, log_level="info")
 
     except KeyboardInterrupt:
         logger.info("Service stopped by user.")
