@@ -3,13 +3,13 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "doc-ai-project"
-version = "0.1.0"
-description = "Document classification and extraction service"
+name = "document-ai-framework"
+version = "1.0.0"
+description = "Production-ready AI-powered document classification and extraction framework"
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "Apache-2.0"}
-authors = [{name = "Your Name", email = "you@example.com"}]
+authors = [{name = "Document AI Framework", email = "contact@example.com"}]
 dependencies = []
 
 [project.urls]
@@ -27,7 +27,6 @@ line-length = 100
 target-version = "py311"
 exclude = [
   ".venv",
-  "demo_web",
 ]
 
 [tool.ruff.lint]

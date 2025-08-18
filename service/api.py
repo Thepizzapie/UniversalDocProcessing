@@ -3,12 +3,14 @@ FastAPI service exposing AI-only document classification and extraction endpoint
 
 Endpoints:
 
-1) POST /classify-extract
+1) GET /health - Health check endpoint
+2) GET /metrics - Service metrics and statistics
+3) POST /classify-extract
    - Accepts one uploaded file (multipart) or a file URL
    - Runs the AI pipeline and returns JSON with "classification" and "data"
    - Optional "callback_url" for async processing
 
-2) POST /classify-extract-batch
+4) POST /classify-extract-batch
    - Accepts multiple uploaded files under the "files" field
    - Processes documents concurrently and returns an array of results
 
@@ -31,8 +33,9 @@ import logging
 import socket
 import time
 from collections import defaultdict, deque
+from datetime import datetime
 from ipaddress import ip_address, ip_network
-from typing import Optional
+from typing import Dict, Optional
 from urllib.parse import urlparse
 
 import httpx
@@ -59,6 +62,18 @@ _processing_semaphore = asyncio.Semaphore(config.max_concurrency)
 
 # Simple in-memory rate limiter (per client IP)
 _requests_by_ip: dict[str, deque[float]] = defaultdict(deque)
+
+# Service metrics
+_service_metrics = {
+    "start_time": datetime.utcnow().isoformat(),
+    "total_requests": 0,
+    "successful_requests": 0,
+    "failed_requests": 0,
+    "total_processing_time_ms": 0,
+    "documents_processed": 0,
+    "document_types_processed": defaultdict(int),
+    "average_processing_time_ms": 0,
+}
 
 # Optional distributed rate limiter (Redis)
 _redis = None
@@ -207,6 +222,95 @@ app = FastAPI(title="Document AI Service", version="1.0.0")
 validate_config()
 
 
+@app.get("/health")
+async def health_check() -> JSONResponse:
+    """Health check endpoint for monitoring and load balancers."""
+    try:
+        # Check OpenAI API key is configured
+        if not config.openai_api_key:
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={"status": "unhealthy", "reason": "OpenAI API key not configured"}
+            )
+        
+        # Check Redis connection if configured
+        if _redis:
+            try:
+                await _redis.ping()
+            except Exception:
+                return JSONResponse(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    content={"status": "unhealthy", "reason": "Redis connection failed"}
+                )
+        
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "status": "healthy",
+                "service": "Document AI Framework",
+                "version": "1.0.0",
+                "timestamp": datetime.utcnow().isoformat(),
+                "uptime_seconds": int((datetime.utcnow() - datetime.fromisoformat(_service_metrics["start_time"])).total_seconds()),
+            }
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"status": "unhealthy", "reason": str(e)}
+        )
+
+
+@app.get("/metrics")
+async def get_metrics() -> JSONResponse:
+    """Service metrics and statistics for monitoring."""
+    # Calculate average processing time
+    if _service_metrics["documents_processed"] > 0:
+        _service_metrics["average_processing_time_ms"] = (
+            _service_metrics["total_processing_time_ms"] / _service_metrics["documents_processed"]
+        )
+    
+    uptime_seconds = int((datetime.utcnow() - datetime.fromisoformat(_service_metrics["start_time"])).total_seconds())
+    
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "service_info": {
+                "name": "Document AI Framework",
+                "version": "1.0.0",
+                "start_time": _service_metrics["start_time"],
+                "uptime_seconds": uptime_seconds,
+                "config": {
+                    "max_concurrency": config.max_concurrency,
+                    "rate_limit_per_min": config.rate_limit_per_min,
+                    "max_file_size_mb": config.max_file_size_mb,
+                    "model_name": config.model_name,
+                    "vision_model_name": config.vision_model_name,
+                }
+            },
+            "request_metrics": {
+                "total_requests": _service_metrics["total_requests"],
+                "successful_requests": _service_metrics["successful_requests"],
+                "failed_requests": _service_metrics["failed_requests"],
+                "success_rate": (
+                    _service_metrics["successful_requests"] / _service_metrics["total_requests"]
+                    if _service_metrics["total_requests"] > 0 else 0
+                ),
+            },
+            "processing_metrics": {
+                "documents_processed": _service_metrics["documents_processed"],
+                "total_processing_time_ms": _service_metrics["total_processing_time_ms"],
+                "average_processing_time_ms": _service_metrics["average_processing_time_ms"],
+                "document_types_processed": dict(_service_metrics["document_types_processed"]),
+            },
+            "system_metrics": {
+                "active_connections": len(_processing_semaphore._waiters) if hasattr(_processing_semaphore, '_waiters') else 0,
+                "available_slots": _processing_semaphore._value,
+                "redis_connected": _redis is not None,
+            }
+        }
+    )
+
+
 async def _process_and_callback(
     file_bytes: Optional[bytes],
     file_path: Optional[str],
@@ -275,7 +379,11 @@ async def classify_extract(
     and a 202 response returned; otherwise the response will be
     synchronous with a 200 status code.
     """
+    # Track request metrics
+    _service_metrics["total_requests"] += 1
+    
     if file is None and not file_url:
+        _service_metrics["failed_requests"] += 1
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="file or file_url must be provided"
         )
@@ -285,6 +393,7 @@ async def classify_extract(
         try:
             DocumentType(doc_type)
         except Exception:
+            _service_metrics["failed_requests"] += 1
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid doc_type")
 
     file_bytes: Optional[bytes] = None
@@ -357,14 +466,27 @@ async def classify_extract(
                 bool(ocr_fallback),
             )
         duration_ms = int((_now() - start) * 1000)
+        
+        # Update metrics
+        _service_metrics["successful_requests"] += 1
+        _service_metrics["documents_processed"] += 1
+        _service_metrics["total_processing_time_ms"] += duration_ms
+        
+        # Track document type if available
+        if result.get("classification", {}).get("type"):
+            doc_type_processed = result["classification"]["type"]
+            _service_metrics["document_types_processed"][doc_type_processed] += 1
+        
         logger.info(
-            "processed document: use_agents=%s refine=%s bytes=%s duration_ms=%s",
+            "processed document: use_agents=%s refine=%s bytes=%s duration_ms=%s type=%s",
             bool(use_agents),
             bool(refine),
             len(file_bytes) if file_bytes else None,
             duration_ms,
+            result.get("classification", {}).get("type", "unknown"),
         )
     except Exception as e:
+        _service_metrics["failed_requests"] += 1
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
     return JSONResponse(status_code=status.HTTP_200_OK, content=result)
 
@@ -382,7 +504,11 @@ async def classify_extract_batch(
     Each element in the returned list contains the same structure as the
     single-document endpoint. Items with errors will include an "errors" field.
     """
+    # Track request metrics
+    _service_metrics["total_requests"] += 1
+    
     if not files:
+        _service_metrics["failed_requests"] += 1
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No files provided")
 
     results: list[dict] = []
@@ -407,4 +533,15 @@ async def classify_extract_batch(
 
     async with _processing_semaphore:
         results = await asyncio.gather(*[_process_one(f) for f in files])
+    
+    # Update batch metrics
+    _service_metrics["successful_requests"] += 1
+    _service_metrics["documents_processed"] += len(files)
+    
+    # Track document types processed in batch
+    for result in results:
+        if result.get("classification", {}).get("type"):
+            doc_type_processed = result["classification"]["type"]
+            _service_metrics["document_types_processed"][doc_type_processed] += 1
+    
     return JSONResponse(status_code=status.HTTP_200_OK, content=results)

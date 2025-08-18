@@ -9,6 +9,7 @@
 - **Plug-and-Play**: Integrate into your existing backend with minimal code changes
 - **Structured Output**: Get clean JSON data ready for your database
 - **Configurable**: Add new document types by updating simple JSON instructions
+- **Production Ready**: Health checks, rate limiting, auth tokens, and concurrency limits
 
 ## Quick Start
 
@@ -35,7 +36,12 @@ python main.py
 
 ### 4) Try it
 ```bash
+# Single document processing
 curl -X POST -F "file=@sample.pdf" http://localhost:8080/classify-extract
+
+# Check service health
+curl http://localhost:8080/health
+
 ```
 
 ## How It Works
@@ -61,11 +67,30 @@ curl -X POST -F "file=@sample.pdf" http://localhost:8080/classify-extract
 }
 ```
 
-## Integration Guide (brief)
+## Integration Guide
 
-### Backend Integration (Any Framework)
+### Using the Python SDK (Recommended)
 
-**Add to your existing API in just 3 lines:**
+**Easy integration with the Python client:**
+
+```python
+from sdk.client import DocAI
+
+# Initialize client
+client = DocAI("http://localhost:8080", token="your-api-token")
+
+# Process a document
+result = client.classify_extract(file_path="/path/to/invoice.pdf")
+print(f"Document type: {result['classification']['type']}")
+print(f"Extracted data: {result['data']}")
+
+# Async processing
+result = await client.classify_extract_async(file_path="/path/to/document.pdf")
+```
+
+### Direct Pipeline Integration
+
+**Embed directly into your backend:**
 
 ```python
 from document_processing.pipeline import run_pipeline
@@ -75,10 +100,6 @@ async def process_document(file: UploadFile):
     result = await asyncio.to_thread(run_pipeline, file.file.read())
     return result["data"]  # Clean structured data
 ```
-
-**That's it!** Your backend now has AI document processing.
-
-See `sdk/client.py` for a Python client. The long React example was moved out of Quick Start to keep this README concise.
 
 ### Database Integration
 
@@ -95,74 +116,57 @@ invoice = Invoice(
 db.save(invoice)
 ```
 
-## Custom Frontend & Backend Integration
+## API Endpoints
 
-The full React and backend examples have been moved to `docs/frontend_example.md`.
+### Core Processing Endpoints
 
-### **Key Differences from Demo Web App**
+#### `POST /classify-extract`
+Process a single document and return structured data.
 
-#### **1. API Response Handling**
+**Parameters:**
+- `file`: Document file (multipart upload)
+- `file_url`: Alternative URL to document
+- `doc_type`: Force specific document type (optional)
+- `use_agents`: Enable CrewAI agents (default: true)
+- `refine`: Enable refinement pass (default: true)
+- `callback_url`: Async processing callback (optional)
 
-**Demo Web App:**
-- Directly maps fields and saves to database
-- Returns HTML redirect response
+**Response:**
+```json
+{
+  "classification": {
+    "type": "invoice",
+    "confidence": 0.95
+  },
+  "data": {
+    "invoice_number": "INV-2024-001",
+    "vendor_name": "Acme Corp",
+    "total_amount": 1250.00,
+    "invoice_date": "2024-01-15"
+  }
+}
+```
 
-**Custom Implementation:**
-- Returns JSON data for frontend consumption
-- Allows frontend to handle success/error states
-- Provides extracted data for validation
+#### `POST /classify-extract-batch`
+Process multiple documents concurrently.
 
-#### **2. File Upload Handling**
+**Parameters:**
+- `files`: Array of document files
+- `doc_type`: Force specific document type (optional)
+- `use_agents`: Enable CrewAI agents (default: true)
+- `refine`: Enable refinement pass (default: true)
 
-**Demo Web App:**
-- Uses FastAPI `UploadFile` directly
-- Processes file synchronously
+### Health Endpoint
 
-**Custom Implementation:**
-- Uses framework-specific upload handlers (multer, MultiPartParser)
-- May implement async processing for better UX
-- Can add file validation and security checks
+#### `GET /health`
+Basic health check for load balancers and monitoring.
 
-#### **3. Error Handling**
+## Environment Configuration
 
-**Demo Web App:**
-- Returns HTML error pages
-- Simple error messages
-
-**Custom Implementation:**
-- Returns structured JSON error responses
-- Detailed error handling for API consumers
-- Frontend can show user-friendly error messages
-
-#### **4. Authentication & Authorization**
-
-**Demo Web App:**
-- No authentication (demo purposes)
-
-**Custom Implementation:**
-- Integrate with your auth system
-- Add user permissions for document types
-- Track document ownership
-
-#### **5. Database Integration**
-
-**Demo Web App:**
-- Uses SQLModel with SQLite
-- Simple schema
-
-**Custom Implementation:**
-- Integrate with existing database/ORM
-- Complex relationships and business logic
-- Data validation and constraints
-
-### **Environment Configuration**
-
-Update your environment variables:
+Core configuration for the Document AI Framework:
 
 ```bash
-# .env file for your custom app
-
-# Document AI Framework Configuration
+# Required: OpenAI Configuration
 OPENAI_API_KEY=sk-your-key-here                    # Required: OpenAI API key
 MODEL_NAME=gpt-5                                   # Chat model for text processing
 VISION_MODEL_NAME=gpt-4o                           # Vision model for image processing
@@ -177,25 +181,9 @@ MAX_FILE_SIZE_MB=15                               # Maximum file size
 ALLOWED_TOKENS=token1,token2,token3               # Comma-separated API tokens
 ALLOW_FILE_URLS=true                              # Allow processing from URLs
 
-# OCR Configuration (Future Enhancement)
-OCR_ENABLED=false                                 # Enable OCR processing
-TESSERACT_CMD=/usr/bin/tesseract                  # Path to Tesseract binary
-POPPLER_PATH=/usr/bin                             # Path to Poppler utilities
-OCR_LANG=eng                                      # OCR language
-
-# Demo Web App Integration
-DOC_API_BASE_URL=http://localhost:8080            # Document AI Framework API
-DOC_API_TOKEN=your-optional-token                 # API authentication token
-
 # Optional: Distributed Rate Limiting
 REDIS_URL=redis://localhost:6379                  # Redis for distributed rate limiting
-
-# Your existing application variables
-DATABASE_URL=postgresql://...
-REDIS_URL=redis://...
 ```
-
-This approach gives you maximum flexibility while leveraging the powerful Document AI Framework for extraction!
 
 ## Document Type Configuration (JSON)
 
@@ -301,50 +289,6 @@ curl -X POST \
 uvicorn service.api:app --host 0.0.0.0 --port 8080 --workers 4
 ```
 
-**2. Docker Deployment**
-```yaml
-# docker-compose.yml (example)
-version: '3.8'
-services:
-  doc-ai-1:
-    build: .
-    ports: 
-      - "8080:8080"
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - MODEL_NAME=${MODEL_NAME:-gpt-5}
-      - VISION_MODEL_NAME=${VISION_MODEL_NAME:-gpt-4o}
-  
-  doc-ai-2:
-    build: .
-    ports: 
-      - "8081:8080"
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - MODEL_NAME=${MODEL_NAME:-gpt-5}
-      - VISION_MODEL_NAME=${VISION_MODEL_NAME:-gpt-4o}
-```
-
-**3. Kubernetes Deployment**
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: doc-ai-framework
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: doc-ai
-  template:
-    spec:
-      containers:
-      - name: doc-ai
-        image: doc-ai-framework:latest
-        ports:
-        - containerPort: 8080
-```
-
 ### Performance Optimization
 
 **1. Async Processing for High Volume**
@@ -442,17 +386,17 @@ Update `pipeline.py` to enable OCR text extraction before vision processing.
 
 ### Core Components
 
-- **`document_processing/`**: AI processing engine
-- **`service/`**: REST API endpoints  
-- **`sdk/`**: Python client library
-- **`demo_web/`**: Example web application
+- **`document_processing/`**: AI processing engine with classification and extraction
+- **`service/`**: Production-ready REST API with monitoring and health checks
+- **`sdk/`**: Python client library for easy integration
+- **`tests/`**: Comprehensive test suite for quality assurance
 
 ## Project Structure
 
 ```
 doc_ai_project/
 │
-├── document_processing/     # Core AI processing logic (AI-only)
+├── document_processing/     # Core AI processing logic
 │   ├── config/
 │   │   └── doc_types.json   # Document type definitions
 │   ├── config.py            # Configuration management
@@ -462,23 +406,21 @@ doc_ai_project/
 │   └── agents.py            # AI agent implementations
 │
 ├── service/                 # FastAPI web service
-│   ├── api.py               # REST API endpoints
-│   └── templates/           # HTML templates
+│   └── api.py               # REST API endpoints (includes /health)
 │
 ├── sdk/                     # Python client SDK
-│   └── client.py            # API client library
-│
-├── demo_web/                # Example web application
-│   ├── main.py              # Demo web interface
-│   ├── models.py            # Database models
-│   └── templates/           # Web templates
+│   └── client.py            # Easy-to-use API client
 │
 ├── tests/                   # Test suite
+│   ├── test_api.py          # API endpoint tests
+│   ├── test_classifier.py   # Classification tests
+│   ├── test_extractor.py    # Extraction tests
+│   ├── test_pipeline.py     # Pipeline tests
+│   └── test_sdk.py          # SDK tests
+│
 ├── Dockerfile               # Container definition
 ├── requirements.txt         # Python dependencies
 ├── pyproject.toml           # Packaging metadata
-├── CODE_OF_CONDUCT.md       # Community standards
-├── CONTRIBUTING.md          # How to contribute
 ├── env.example              # Environment variable template
 ├── LICENSE                  # Apache-2.0 license
 └── main.py                  # Entry point
@@ -533,270 +475,7 @@ git push heroku main
 # Use the included Dockerfile for container deployment
 ```
 
-## Step-by-Step: Adding Load Sheet Uploader (Demo)
 
-Follow this complete guide to add a load sheet uploader to your demo web application, just like we did for invoices and receipts.
-
-### **Step 1: Add Load Sheet Upload Routes**
-
-Edit `demo_web/main.py` and add these two routes after the existing load sheet routes:
-
-```python
-@router.get("/load-sheets/upload", response_class=HTMLResponse)
-def upload_load_sheet_form(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("loads_upload.html", {"request": request})
-
-
-@router.post("/load-sheets/upload")
-def upload_load_sheet(
-    request: Request,
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db),
-):
-    """Upload a load sheet image/PDF, send to the document API, and save to DB."""
-    base_url = os.environ.get("DOC_API_BASE_URL", "http://127.0.0.1:8080")
-
-    files = {"file": (file.filename or "upload", file.file, file.content_type or "application/octet-stream")}
-    data = {
-        # Force 'load_sheet' type for proper field mapping
-        "doc_type": "load_sheet",
-        "return_text": "false",
-        "use_agents": "true",
-        "refine": "true",
-        "ocr_fallback": "true",
-    }
-    headers = {}
-    token = os.environ.get("DOC_API_TOKEN")
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    try:
-        resp = requests.post(
-            f"{base_url}/classify-extract",
-            files=files,
-            data=data,
-            headers=headers,
-            timeout=120,
-        )
-        resp.raise_for_status()
-    except Exception as err:
-        from fastapi.responses import HTMLResponse
-        msg = (
-            f"Upload failed contacting Document API at {base_url}. "
-            f"Error: {err}. Ensure the API is running (python -m uvicorn service.api:app --port 8080) "
-            f"or set DOC_API_BASE_URL."
-        )
-        return HTMLResponse(f"<p>{msg}</p><p><a href='/load-sheets/upload'>Back</a></p>", status_code=502)
-    payload = resp.json()
-    extracted = payload.get("data") or {}
-
-    # Map extracted fields to load sheet database fields
-    load_number = _pick_first(extracted, [
-        "Load Number",
-        "load_number",
-        "BOL Number",
-        "Bill of Lading",
-        "Reference Number",
-    ]) or ""
-
-    pickup_location = _pick_first(extracted, [
-        "Pickup Location",
-        "pickup_location", 
-        "Origin",
-        "Pickup Address",
-        "From",
-    ]) or ""
-
-    dropoff_location = _pick_first(extracted, [
-        "Dropoff Location",
-        "dropoff_location",
-        "Destination", 
-        "Delivery Address",
-        "To",
-    ]) or ""
-
-    pickup_date = _pick_first(extracted, [
-        "Pickup Date",
-        "pickup_date",
-        "Load Date",
-        "Departure Date",
-    ]) or ""
-
-    dropoff_date = _pick_first(extracted, [
-        "Dropoff Date", 
-        "dropoff_date",
-        "Delivery Date",
-        "Arrival Date",
-    ]) or ""
-
-    carrier_name = _pick_first(extracted, [
-        "Carrier Name",
-        "carrier_name",
-        "Carrier",
-        "Trucking Company",
-        "Driver",
-    ]) or ""
-
-    # Extract weight - handle various units
-    weight_str = _pick_first(extracted, [
-        "Total Weight (lbs)",
-        "total_weight_lbs",
-        "Weight",
-        "Total Weight",
-        "Gross Weight",
-    ]) or ""
-    
-    # Extract numeric weight value
-    import re as _re
-    weight_match = _re.search(r"[-+]?[0-9]*\.?[0-9]+", str(weight_str))
-    total_weight_lbs = float(weight_match.group(0)) if weight_match else 0.0
-
-    item = LoadSheetEntry(
-        load_number=load_number or (file.filename or ""),
-        pickup_location=pickup_location,
-        dropoff_location=dropoff_location,
-        pickup_date=pickup_date,
-        dropoff_date=dropoff_date,
-        carrier_name=carrier_name,
-        total_weight_lbs=total_weight_lbs,
-    )
-    db.add(item)
-    db.commit()
-    return RedirectResponse(url="/load-sheets", status_code=303)
-```
-
-### **Step 2: Create Load Sheet Upload Template**
-
-Create `demo_web/templates/loads_upload.html`:
-
-```html
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <title>Upload Load Sheet</title>
-    <style>
-      body { font-family: Arial, sans-serif; margin: 24px; }
-      form > div { margin-bottom: 10px; }
-    </style>
-  </head>
-  <body>
-    <h1>Upload Load Sheet</h1>
-    <p><a href="/load-sheets">Back to list</a></p>
-    <form method="post" enctype="multipart/form-data">
-      <div>
-        <label>File (PDF or image)
-          <input type="file" name="file" accept="application/pdf,image/*" required />
-        </label>
-      </div>
-      <button type="submit">Upload & Save</button>
-    </form>
-  </body>
-</html>
-```
-
-### **Step 3: Add Upload Link to Load Sheet List**
-
-Edit `demo_web/templates/loads_list.html` and add the upload link:
-
-```html
-<p><a href="/">Home</a> <a href="/load-sheets/new">New Load Sheet</a> <a href="/load-sheets/upload">Upload Load Sheet</a></p>
-```
-
-### **Step 4: Configure Load Sheet Instructions**
-
-Your `document_processing/config/doc_types.json` should already have load sheet configuration. If not, add:
-
-```json
-{
-  "load_sheet": {
-    "description": "Load sheet or bill of lading document",
-    "instructions": {
-      "schema": {
-        "load_number": "Load number, BOL number, or reference number",
-        "pickup_location": "Pickup address or origin location",
-        "dropoff_location": "Delivery address or destination location",
-        "pickup_date": "Date of pickup or departure (YYYY-MM-DD)",
-        "dropoff_date": "Date of delivery or arrival (YYYY-MM-DD)",
-        "carrier_name": "Trucking company or carrier name",
-        "total_weight_lbs": "Total weight in pounds (numeric value only)"
-      },
-      "guidelines": [
-        "Convert weights to pounds if given in other units",
-        "Normalize dates to YYYY-MM-DD when possible",
-        "Extract numeric values as numbers, not strings"
-      ]
-    },
-    "profile": {
-      "keywords": ["load", "BOL", "bill of lading", "carrier", "pickup", "delivery"],
-      "likely_fields": ["load_number", "pickup_location", "dropoff_location", "total_weight_lbs"],
-      "confidence_hints": ["origin/destination blocks", "weight with units"]
-    }
-  }
-}
-```
-
-### **Step 5: Update Document Type Enum**
-
-Ensure `document_processing/doc_classifier.py` includes load_sheet:
-
-```python
-class DocumentType(str, Enum):
-    INVOICE = "invoice"
-    RECEIPT = "receipt"
-    LOAD_SHEET = "load_sheet"  # Make sure this exists
-```
-
-### **Step 6: Test Your Load Sheet Uploader**
-
-1. **Restart your demo web app** to pick up the new routes
-2. **Navigate to** http://127.0.0.1:8090/load-sheets
-3. **Click "Upload Load Sheet"**
-4. **Select a load sheet image/PDF**
-5. **Upload and verify** the extracted data appears in the list
-
-### **How the Framework Linking Works**
-
-When you upload a load sheet:
-
-1. **Frontend** → `POST /load-sheets/upload` with file
-2. **Demo Web** → Calls Document AI API with `doc_type=load_sheet`
-3. **AI Framework** → Uses load_sheet JSON instructions for extraction
-4. **Vision Fallback (optional)** → Extracts structured data from the image if OCR/text path yields no data
-5. **Field Mapping** → Maps AI output to database schema
-6. **Database** → Saves LoadSheetEntry with clean data
-
-```mermaid
-graph LR
-    A[Load Sheet Image] → B[Upload Form]
-    B → C[Demo Web API]
-    C → D[Document AI API]
-    D → E[GPT-5 Vision]
-    E → F[Structured JSON]
-    F → G[Database Table]
-```
-
-### **Field Mapping Strategy**
-
-The `_pick_first()` function tries multiple field name variations:
-
-```python
-# Example: Load number can be called different things
-load_number = _pick_first(extracted, [
-    "Load Number",      # Exact match
-    "load_number",      # Snake case  
-    "BOL Number",       # Bill of Lading
-    "Reference Number", # Generic reference
-])
-```
-
-This handles variations in how different companies label their documents.
-
-### **Pro Tips for Load Sheet Instructions**
-
-1. **Be specific about units**: "Total weight in pounds (numeric value only)"
-2. **Handle date formats**: "Format dates as MM/DD/YYYY" 
-3. **Account for variations**: Include common field name variations
-4. **Specify data types**: "Return numeric values for weights"
 
 ## Use Cases
 

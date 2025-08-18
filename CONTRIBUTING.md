@@ -5,9 +5,10 @@ Thank you for your interest in contributing! We welcome issues, discussions, and
 ## Development Setup
 - Create and activate a virtual environment
 - Install dependencies: `pip install -r requirements.txt`
-- Run the API: `python -m uvicorn service.api:app --port 8080`
-- Run the demo: `python -m uvicorn demo_web.main:app --port 8090`
-- Run tests: `pytest -q`
+- Configure environment: `cp env.example .env` and add your OpenAI API key
+- Run the framework: `python main.py`
+- Test the API: `curl http://localhost:8080/health`
+- Run tests: `pytest -q` (if test suite is available)
 
 ## Branching Model
 - Use feature branches from `dev` (e.g., `feat/batch-endpoint`, `fix/classifier-vision`)

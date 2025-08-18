@@ -66,12 +66,14 @@ Thumbs.db
 *.temp
 temp/
 
-# Testing
+# Testing artifacts (keep tests/ directory)
 .coverage
 .pytest_cache/
 htmlcov/
 .tox/
-tests/
+
+# Demo web app - not part of core framework
+demo_web/
 
 # Developer utilities not needed by client
 scripts/
