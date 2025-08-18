@@ -11,7 +11,7 @@ import pytest  # noqa: E402
 try:  # noqa: E402
     from sdk.client import DocAI  # noqa: E402
 except Exception as exc:  # noqa: E402
-    pytest.skip(f'Skipping SDK tests: {exc}', allow_module_level=True)  # noqa: E402
+    pytest.skip(f"Skipping SDK tests: {exc}", allow_module_level=True)  # noqa: E402
 
 
 def test_sync_client_requires_input():
