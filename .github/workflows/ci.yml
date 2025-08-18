@@ -9,17 +9,14 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
 
     steps:
     - uses: actions/checkout@v4
     
-    - name: Set up Python ${{ matrix.python-version }}
+    - name: Set up Python 3.12
       uses: actions/setup-python@v4
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version: "3.12"
     
     - name: Cache pip dependencies
       uses: actions/cache@v3
@@ -38,17 +35,17 @@ jobs:
     - name: Lint with ruff
       run: |
         pip install ruff
-        ruff check document_processing/ service/ sdk/
+        ruff check .
     
     - name: Format check with black
       run: |
         pip install black
-        black --check document_processing/ service/ sdk/
+        black --check .
     
     - name: Type check with mypy
       run: |
         pip install mypy types-requests
-        mypy document_processing/ service/ sdk/ --ignore-missing-imports
+        mypy . --ignore-missing-imports
       continue-on-error: true
     
     - name: Run tests with coverage
