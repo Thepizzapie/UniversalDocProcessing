@@ -252,7 +252,8 @@ async def health_check() -> JSONResponse:
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "uptime_seconds": int(
                     (
-                        datetime.now(timezone.utc) - datetime.fromisoformat(_service_metrics["start_time"])
+                        datetime.now(timezone.utc)
+                        - datetime.fromisoformat(_service_metrics["start_time"])
                     ).total_seconds()
                 ),
             },
@@ -274,7 +275,9 @@ async def get_metrics() -> JSONResponse:
         )
 
     uptime_seconds = int(
-        (datetime.now(timezone.utc) - datetime.fromisoformat(_service_metrics["start_time"])).total_seconds()
+        (
+            datetime.now(timezone.utc) - datetime.fromisoformat(_service_metrics["start_time"])
+        ).total_seconds()
     )
 
     return JSONResponse(
