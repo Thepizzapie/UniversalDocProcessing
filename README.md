@@ -2,7 +2,27 @@
 
 > AI-only document classification and extraction service (Vision + Chat)
 
-## What This Framework Does
+## Table of Contents
+
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [How It Works](#how-it-works)
+- [Integration Guide](#integration-guide)
+- [API Endpoints](#api-endpoints)
+- [Configuration](#configuration)
+- [Scaling Your Implementation](#scaling-your-implementation)
+- [OCR Support](#ocr-support)
+- [Architecture Overview](#architecture-overview)
+- [Project Structure](#project-structure)
+- [Testing & Development](#testing--development)
+- [Deployment Options](#deployment-options)
+- [Use Cases](#use-cases)
+- [Contributing](#contributing)
+- [License](#license)
+- [Security & Authentication](#security--authentication)
+- [MCP Integration](#mcp-integration)
+
+## Features
 
 - **Document Processing**: Upload any invoice, receipt, or custom document as image/PDF
 - **AI-Powered**: Classification + extraction using OpenAI (`MODEL_NAME` for text processing, `VISION_MODEL_NAME` for image analysis)
@@ -164,7 +184,9 @@ Process multiple documents concurrently.
 #### `GET /health`
 Basic health check for load balancers and monitoring.
 
-## Environment Configuration
+## Configuration
+
+### Environment Variables
 
 Core configuration for the Document AI Framework:
 
@@ -188,7 +210,7 @@ ALLOW_FILE_URLS=true                              # Allow processing from URLs
 REDIS_URL=redis://localhost:6379                  # Redis for distributed rate limiting
 ```
 
-## Document Type Configuration (JSON)
+### Document Type Configuration (JSON)
 
 ### Setting Up Instructions for Your Document Types
 
@@ -327,7 +349,7 @@ def save_batch(extracted_documents):
     ])
 ```
 
-## OCR (Future Enhancement)
+## OCR Support
 
 The current implementation is **AI-only** and uses OpenAI Vision models for direct image understanding. OCR libraries are included in the dependencies for future enhancement but are not currently active in the processing pipeline.
 
@@ -338,16 +360,16 @@ The framework directly processes images and PDFs using:
 - **PDF to image conversion** for PDF processing
 - **No intermediate OCR text step** - works directly with visual content
 
-### OCR Integration (Future)
+### Enabling OCR
 
-If you want to add OCR support:
+If the vision-only approach struggles with certain scans, you can enable OCR.
 
 **1. Install OCR Dependencies**
 ```bash
 # Ubuntu/Debian
 sudo apt-get install tesseract-ocr poppler-utils
 
-# macOS  
+# macOS
 brew install tesseract poppler
 
 # Windows
@@ -364,6 +386,16 @@ POPPLER_PATH=C:\\path\\to\\poppler\\bin
 
 **3. Modify Pipeline**
 Update `pipeline.py` to enable OCR text extraction before vision processing.
+
+```python
+from document_processing.ocr import to_text  # implement a helper that uses pytesseract/pdfminer
+
+text = to_text(file_path)  # use when OCR_ENABLED is true before calling classification
+```
+
+**4. Troubleshooting**
+- Ensure the binaries are on PATH.
+- For PDFs, convert to images before OCR or use pdfminer.
 
 ### Benefits of Current Vision Approach
 
@@ -517,45 +549,6 @@ MIT - see `LICENSE`.
 - Bearer token support is built-in (set `ALLOWED_TOKENS` in `.env`).
 - For OAuth2/OpenID Connect, place a reverse proxy (e.g. NGINX, API Gateway) in front of this service to validate tokens and forward authenticated requests with a `Bearer` token header. Provide examples in deployment configs.
 - Distributed rate limiting: set `REDIS_URL` to enable Redis-backed per-IP limits. For multi-region or Kubernetes, use a global Redis/ElastiCache or API Gateway rate-limiting.
-
-## OCR Integration (How-To)
-
-If the vision-only approach struggles with certain scans, you can enable OCR.
-
-1) Install OCR dependencies
-```bash
-# Ubuntu/Debian
-sudo apt-get install tesseract-ocr poppler-utils
-
-# macOS
-brew install tesseract poppler
-
-# Windows
-# Tesseract: https://github.com/UB-Mannheim/tesseract/wiki
-# Poppler:   https://github.com/oschwartz10612/poppler-windows
-```
-
-2) Configure OCR in `.env`
-```env
-OCR_ENABLED=true
-TESSERACT_CMD=/usr/bin/tesseract   # or Windows path
-POPPLER_PATH=/usr/local/bin        # where pdfimages/pdftoppm live
-```
-
-3) Pipeline hook (example)
-```python
-from document_processing.ocr import to_text  # implement a helper that uses pytesseract/pdfminer
-
-text = to_text(file_path)  # use when OCR_ENABLED is true before calling classification
-```
-
-4) Troubleshooting
-- Ensure the binaries are on PATH.
-- For PDFs, convert to images before OCR or use pdfminer.
-
----
-
-
 
 ## MCP Integration
 
