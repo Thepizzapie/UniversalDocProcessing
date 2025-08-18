@@ -13,7 +13,6 @@ repos:
     rev: 23.12.1
     hooks:
       - id: black
-        language_version: python3.11
         files: ^(document_processing|service|sdk)/.*\.py$
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
