@@ -79,12 +79,12 @@ jobs:
     
     - name: Security scan with bandit
       run: |
-        bandit -r document_processing/ service/ sdk/ -f json -o bandit-report.json
+        bandit -r document_processing/ service/ sdk/ -f json
       continue-on-error: true
     
     - name: Check dependencies with safety
       run: |
-        safety check --json --output safety-report.json
+        safety check --json
       continue-on-error: true
 
   build:

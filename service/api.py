@@ -33,7 +33,7 @@ import logging
 import socket
 import time
 from collections import defaultdict, deque
-from datetime import datetime
+from datetime import datetime, timezone
 from ipaddress import ip_address, ip_network
 from typing import Optional
 from urllib.parse import urlparse
@@ -65,7 +65,7 @@ _requests_by_ip: dict[str, deque[float]] = defaultdict(deque)
 
 # Service metrics
 _service_metrics = {
-    "start_time": datetime.utcnow().isoformat(),
+    "start_time": datetime.now(timezone.utc).isoformat(),
     "total_requests": 0,
     "successful_requests": 0,
     "failed_requests": 0,
@@ -249,10 +249,10 @@ async def health_check() -> JSONResponse:
                 "status": "healthy",
                 "service": "Document AI Framework",
                 "version": "1.0.0",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "uptime_seconds": int(
                     (
-                        datetime.utcnow() - datetime.fromisoformat(_service_metrics["start_time"])
+                        datetime.now(timezone.utc) - datetime.fromisoformat(_service_metrics["start_time"])
                     ).total_seconds()
                 ),
             },
@@ -274,7 +274,7 @@ async def get_metrics() -> JSONResponse:
         )
 
     uptime_seconds = int(
-        (datetime.utcnow() - datetime.fromisoformat(_service_metrics["start_time"])).total_seconds()
+        (datetime.now(timezone.utc) - datetime.fromisoformat(_service_metrics["start_time"])).total_seconds()
     )
 
     return JSONResponse(
