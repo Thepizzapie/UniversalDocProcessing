@@ -154,24 +154,39 @@ def classify_document(
     # Initialize LLM if not provided
     if model is None:
         config = get_config()
-        if not config.openai_api_key:
-            raise ValueError("OPENAI_API_KEY is not set; cannot perform classification")
-        if (config.model_name or "").lower() == "gpt-5":
-            model = ChatOpenAI(
-                openai_api_key=config.openai_api_key,
-                openai_api_base=config.openai_api_base,
-                model_name=config.model_name,
-                temperature=1.0,
-                max_completion_tokens=300,
-            )
+        if config.llm_provider == "openai":
+            if not config.openai_api_key:
+                raise ValueError("OPENAI_API_KEY is not set; cannot perform classification")
+            if (config.model_name or "").lower() == "gpt-5":
+                model = ChatOpenAI(
+                    openai_api_key=config.openai_api_key,
+                    openai_api_base=config.openai_api_base,
+                    model_name=config.model_name,
+                    temperature=1.0,
+                    max_completion_tokens=300,
+                )
+            else:
+                model = ChatOpenAI(
+                    openai_api_key=config.openai_api_key,
+                    openai_api_base=config.openai_api_base,
+                    temperature=0.1,
+                    model_name=config.model_name,
+                    max_tokens=256,
+                )
+        elif config.llm_provider == "mistral":
+            # TODO: Add Mistral LLM instantiation here
+            raise NotImplementedError("Mistral provider not yet implemented")
+        elif config.llm_provider == "llama":
+            # TODO: Add Llama LLM instantiation here
+            raise NotImplementedError("Llama provider not yet implemented")
+        elif config.llm_provider == "deepseek":
+            # TODO: Add DeepSeek LLM instantiation here
+            raise NotImplementedError("DeepSeek provider not yet implemented")
+        elif config.llm_provider == "huggingface":
+            # TODO: Add HuggingFace LLM instantiation here
+            raise NotImplementedError("HuggingFace provider not yet implemented")
         else:
-            model = ChatOpenAI(
-                openai_api_key=config.openai_api_key,
-                openai_api_base=config.openai_api_base,
-                temperature=0.1,
-                model_name=config.model_name,
-                max_tokens=256,
-            )
+            raise ValueError(f"Unknown LLM provider: {config.llm_provider}")
 
     # Determine allowed types for the prompt
     if allowed_types is None:

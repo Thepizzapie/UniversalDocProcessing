@@ -1,3 +1,41 @@
+def get_vector_db_connector(config):
+    if config.vector_db_provider == "pgvector":
+        # TODO: Add PGVector connector
+        return None
+    elif config.vector_db_provider == "chromadb":
+        # TODO: Add ChromaDB connector
+        return None
+    elif config.vector_db_provider == "weaviate":
+        # TODO: Add Weaviate connector
+        return None
+    else:
+        raise ValueError(f"Unknown vector DB provider: {config.vector_db_provider}")
+
+def get_embedding_model(config):
+    if config.embedding_provider == "openai":
+        # TODO: Add OpenAI embedding model
+        return None
+    elif config.embedding_provider == "huggingface":
+        # TODO: Add HuggingFace embedding model
+        return None
+    elif config.embedding_provider == "ollama":
+        # TODO: Add Ollama embedding model
+        return None
+    else:
+        raise ValueError(f"Unknown embedding provider: {config.embedding_provider}")
+
+def get_text_extractor(config):
+    if config.text_extractor_provider == "llmwhisperer":
+        # TODO: Add LLMWhisperer extractor
+        return None
+    elif config.text_extractor_provider == "unstructured":
+        # TODO: Add Unstructured.io extractor
+        return None
+    elif config.text_extractor_provider == "llamaparse":
+        # TODO: Add LlamaParse extractor
+        return None
+    else:
+        raise ValueError(f"Unknown text extractor provider: {config.text_extractor_provider}")
 """
 pipeline
 ========
@@ -23,7 +61,6 @@ directly into other Python code for programmatic use.
 
 """
 
-from __future__ import annotations
 
 import json
 import logging
@@ -117,60 +154,58 @@ def run_pipeline(
     # Step 1: No OCR – AI-only pipeline
     text = ""
 
-    # Step 2: Identify profile (Agent 1) and classify (Agent 2) unless forced
+    # Agent 1: Identify profile
+    profile = None
+    try:
+        profile = identify_profile_with_agent(text or "") if use_agents else {}
+        json_log("pipeline:identified profile", profile=profile)
+    except Exception as err:
+        logger.exception("pipeline: profile identification failed: %s", err)
+        errors.append({"code": "E_PROFILE_FAILED", "message": str(err)})
+        profile = {}
+
+    # Agent 2: Classifier matches profile to doc_types.json
+    classification = None
+    matched_type = None
     if forced_doc_type:
         try:
             forced_enum = DocumentType(forced_doc_type)
         except Exception:
-            # Prefer a neutral fallback instead of assuming receipt
             forced_enum = DocumentType.OTHER
-        classification: ClassificationResult = ClassificationResult(
-            type=forced_enum, confidence=1.0
-        )
+        classification = ClassificationResult(type=forced_enum, confidence=1.0)
+        matched_type = forced_enum
     else:
-        # Identify a profile first (currently unused but may be used in future)
         try:
-            identify_profile_with_agent(text or "") if use_agents else {}
-        except Exception:
-            pass
-
-        # Classify using OCR text / profile.
-        try:
-            if use_agents:
-                if text:
-                    classification = classify_with_agent(text)
-                else:
-                    # No text → classify directly from image using vision
-                    classification = classify_document_from_image(str(tmp_path))
-            else:
-                # If no OCR text, try image-based classification first
-                if not text and tmp_path.exists():
-                    classification = classify_document_from_image(str(tmp_path))
-                else:
-                    # For gpt-5, prefer direct OpenAI client to avoid LangChain max_tokens usage
-                    from .config import get_config as _gc
-
-                    if (_gc().model_name or "").lower() == "gpt-5":
-                        classification = classify_document_openai(text or "")
-                    else:
-                        classification = classify_document(text or "")
+            # Compare profile to doc_types.json
+            doc_types = get_instructions_for_type
+            # Find best match (simple string match for now, can be improved)
+            config_types = [dt for dt in DocumentType]
+            best_match = DocumentType.OTHER
+            for dt in config_types:
+                if profile and dt.value in json.dumps(profile).lower():
+                    best_match = dt
+                    break
+            matched_type = best_match
+            # Use agent classifier to confirm
+            classification = classify_with_agent(json.dumps(profile)) if use_agents else ClassificationResult(type=matched_type, confidence=1.0)
             logger.info(
                 "pipeline: classified document as %s (conf=%.3f)",
                 classification.type.value,
                 classification.confidence,
             )
-            # If OCR text is empty, lower confidence
-            if not text:
-                classification.confidence = min(classification.confidence, 0.2)
         except Exception as err:
             logger.exception("pipeline: classification failed: %s", err)
             errors.append({"code": "E_CLASSIFICATION_FAILED", "message": str(err)})
             classification = ClassificationResult(type=DocumentType.OTHER, confidence=0.0)
+            matched_type = DocumentType.OTHER
     logger.info(
         "pipeline:finished step=classify type=%s conf=%.3f",
         classification.type.value,
         classification.confidence,
     )
+
+    # Agent 3: Extractor uses instructions for matched type
+    instructions = get_instructions_for_type(matched_type)
 
     # Step 3: Retrieve extraction instructions
     instructions = get_instructions_for_type(classification.type)

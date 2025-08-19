@@ -15,6 +15,13 @@ This document lists all environment variables used in the Document AI Framework.
 - `REQUIRE_AUTH`: Whether authentication is required for API endpoints.
 - `ALLOWED_TOKENS`: List of bearer tokens allowed for authentication.
 
+# MCP integration
+- `ENABLE_MCP`: Whether to start an external MCP server (true/false). Default is false.
+- `MCP_SERVER_CMD`: Command to start the MCP server (if enabled).
+- `MCP_SERVER_ARGS`: Space-separated additional arguments to pass to the MCP server command.
+- `ALLOWLIST_TOOLS`: Comma-separated list of tools allowed to be used from MCP.
+- `BLOCKLIST_TOOLS`: Comma-separated list of tools to block from MCP.
+
 ## Default Values
 
 - `MAX_FILE_SIZE_MB`: Default is 10 MB.

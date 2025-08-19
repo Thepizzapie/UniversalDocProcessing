@@ -169,7 +169,27 @@ Basic health check for load balancers and monitoring.
 Core configuration for the Document AI Framework:
 
 ```bash
-# Required: OpenAI Configuration
+
+# LLM Provider Configuration
+LLM_PROVIDER=openai        # openai, deepseek, mistral, llama, huggingface, etc.
+LLM_API_BASE_URL=...       # API base for LLM provider
+LLM_MODEL_NAME=...         # Model name for LLM
+
+# Embedding Model Configuration
+EMBEDDING_PROVIDER=openai  # huggingface, ollama, custom
+EMBEDDING_API_BASE_URL=...
+EMBEDDING_MODEL_NAME=...
+
+# Vector Database Configuration
+VECTOR_DB_PROVIDER=pgvector   # chromadb, weaviate, etc.
+VECTOR_DB_URL=...
+VECTOR_DB_API_KEY=...
+
+# Text Extractor Configuration
+TEXT_EXTRACTOR_PROVIDER=llmwhisperer   # unstructured, llamaparse, etc.
+TEXT_EXTRACTOR_API_BASE_URL=...
+
+# OpenAI Configuration (default)
 OPENAI_API_KEY=sk-your-key-here                    # Required: OpenAI API key
 MODEL_NAME=gpt-5                                   # Chat model for text processing
 VISION_MODEL_NAME=gpt-4o                           # Vision model for image processing
@@ -557,43 +577,4 @@ text = to_text(file_path)  # use when OCR_ENABLED is true before calling classif
 
 
 
-## MCP Integration
 
-### Enabling MCP Connections
-
-The framework supports integration with MCP servers for tool discovery and execution. By default, MCP connections are disabled, and agents run independently. To enable MCP connections:
-
-1. Update the `.env` file:
-
-```env
-ENABLE_MCP=true
-MCP_SERVER_CMD=your-mcp-server-command
-MCP_SERVER_ARGS=your-mcp-server-arguments
-ALLOWLIST_TOOLS=tool1,tool2
-BLOCKLIST_TOOLS=tool3,tool4
-```
-
-2. Restart the service:
-
-```bash
-python main.py
-```
-
-### Using MCP Tools
-
-When MCP is enabled, agents can discover and use tools provided by the MCP server. Tool filtering can be configured using allowlists and blocklists in the `.env` file.
-
-### Example
-
-```python
-from document_processing.agents import extract_with_agent
-
-# Enable MCP in the environment
-os.environ["ENABLE_MCP"] = "true"
-os.environ["MCP_SERVER_CMD"] = "mock_mcp_server"
-os.environ["MCP_SERVER_ARGS"] = "--mock-args"
-
-# Run extraction with MCP tools
-result = extract_with_agent("Sample text", "Sample instructions")
-print(result)
-```

@@ -14,9 +14,13 @@ logger = logging.getLogger("doc_ai_config")
 
 
 class Config:
-    """Centralized configuration for the document processing framework."""
+    """Centralized configuration for the document processing framework.
 
-    def __init__(self):
+    All environment variable parsing lives here. This keeps the rest of the
+    codebase simple and testable by importing `config`.
+    """
+
+    def __init__(self) -> None:
         """Initialize configuration from environment variables."""
         # OpenAI Configuration
         self.openai_api_key = os.environ.get("OPENAI_API_KEY")
@@ -32,18 +36,12 @@ class Config:
         self.ocr_lang = os.environ.get("OCR_LANG", "eng")
 
         # API Security Configuration
-        self.allowed_tokens = {
-            t.strip() for t in os.environ.get("ALLOWED_TOKENS", "").split(",") if t.strip()
-        }
+        self.allowed_tokens = {t.strip() for t in os.environ.get("ALLOWED_TOKENS", "").split(",") if t.strip()}
         self.require_auth = bool(self.allowed_tokens)
 
         # Processing Limits
         self.max_file_size_mb = int(os.environ.get("MAX_FILE_SIZE_MB", "15"))
-        self.allow_file_urls = os.environ.get("ALLOW_FILE_URLS", "true").lower() in {
-            "1",
-            "true",
-            "yes",
-        }
+        self.allow_file_urls = os.environ.get("ALLOW_FILE_URLS", "true").lower() in {"1", "true", "yes"}
         self.max_concurrency = int(os.environ.get("MAX_CONCURRENCY", "4"))
         self.rate_limit_per_min = int(os.environ.get("RATE_LIMIT_PER_MIN", "60"))
 
@@ -53,6 +51,8 @@ class Config:
         # Demo Web Configuration
         self.doc_api_base_url = os.environ.get("DOC_API_BASE_URL", "http://127.0.0.1:8080")
         self.doc_api_token = os.environ.get("DOC_API_TOKEN")
+
+
 
     def validate(self) -> Dict[str, Any]:
         """Validate configuration and return validation results.
@@ -118,6 +118,8 @@ class Config:
 
 # Global configuration instance
 config = Config()
+
+# Module-level aliases (convenience for tests and simple imports)
 
 
 def get_config() -> Config:

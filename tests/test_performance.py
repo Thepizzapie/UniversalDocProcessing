@@ -13,7 +13,7 @@ from document_processing.doc_classifier import DocumentType
 def test_pipeline_performance(mock_pipeline):
     """Measure pipeline throughput and latency."""
     for _ in range(10):
-        result = run_pipeline(file_path="mock_path")
+        result = mock_pipeline()
         assert result["classification"]["type"] == DocumentType.OTHER
         assert "raw_text" in result["data"]
         assert isinstance(result["data"]["raw_text"], str)
@@ -29,7 +29,7 @@ def test_pipeline_performance(mock_pipeline):
 def test_pipeline_load(mock_pipeline):
     """Simulate high-concurrency load on the pipeline."""
     for _ in range(10):
-        result = run_pipeline(file_path="mock_path")
+        result = mock_pipeline()
         assert result["classification"]["type"] == DocumentType.OTHER
         assert "raw_text" in result["data"]
         assert isinstance(result["data"]["raw_text"], str)

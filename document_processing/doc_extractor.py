@@ -65,23 +65,37 @@ def extract_fields(
     """
     if model is None:
         config = get_config()
-        if (config.model_name or "").lower() == "gpt-5":
-            # gpt-5: use temperature=1 and max_completion_tokens instead of max_tokens
-            model = ChatOpenAI(
-                openai_api_key=config.openai_api_key,
-                openai_api_base=config.openai_api_base,
-                model_name=config.model_name,
-                temperature=1.0,
-                max_completion_tokens=1200,
-            )
+        if config.llm_provider == "openai":
+            if (config.model_name or "").lower() == "gpt-5":
+                model = ChatOpenAI(
+                    openai_api_key=config.openai_api_key,
+                    openai_api_base=config.openai_api_base,
+                    model_name=config.model_name,
+                    temperature=1.0,
+                    max_completion_tokens=1200,
+                )
+            else:
+                model = ChatOpenAI(
+                    openai_api_key=config.openai_api_key,
+                    openai_api_base=config.openai_api_base,
+                    temperature=0.0,
+                    model_name=config.model_name,
+                    max_tokens=2048,
+                )
+        elif config.llm_provider == "mistral":
+            # TODO: Add Mistral LLM instantiation here
+            raise NotImplementedError("Mistral provider not yet implemented")
+        elif config.llm_provider == "llama":
+            # TODO: Add Llama LLM instantiation here
+            raise NotImplementedError("Llama provider not yet implemented")
+        elif config.llm_provider == "deepseek":
+            # TODO: Add DeepSeek LLM instantiation here
+            raise NotImplementedError("DeepSeek provider not yet implemented")
+        elif config.llm_provider == "huggingface":
+            # TODO: Add HuggingFace LLM instantiation here
+            raise NotImplementedError("HuggingFace provider not yet implemented")
         else:
-            model = ChatOpenAI(
-                openai_api_key=config.openai_api_key,
-                openai_api_base=config.openai_api_base,
-                temperature=0.0,
-                model_name=config.model_name,
-                max_tokens=2048,
-            )
+            raise ValueError(f"Unknown LLM provider: {config.llm_provider}")
 
     # Build the prompt instructing the model to follow instructions and return JSON
     prompt = ChatPromptTemplate.from_template(

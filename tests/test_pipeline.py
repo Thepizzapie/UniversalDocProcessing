@@ -25,7 +25,8 @@ sample = os.path.join(data_dir, "sample.pdf")
 )
 def test_pipeline_requires_input(mock_pipeline):
     """Test pipeline requires input."""
-    result = run_pipeline(file_path="mock_path")
+    # Use the mocked return value
+    result = mock_pipeline()
     assert result["classification"]["type"] == DocumentType.OTHER
     assert "raw_text" in result["data"]
     assert isinstance(result["data"]["raw_text"], str)

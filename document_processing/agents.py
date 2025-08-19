@@ -52,22 +52,36 @@ __all__ = [
 
 def _default_llm(temperature: float = 1.0, max_tokens: int = 1024) -> ChatOpenAI:
     config = get_config()
-    # GPT-5 uses max_completion_tokens, and requires default temperature (1)
-    if (config.model_name or "").lower() == "gpt-5":
+    if config.llm_provider == "openai":
+        if (config.model_name or "").lower() == "gpt-5":
+            return ChatOpenAI(
+                openai_api_key=config.openai_api_key,
+                openai_api_base=config.openai_api_base,
+                model_name=config.model_name,
+                temperature=1.0,
+                max_completion_tokens=max_tokens,
+            )
         return ChatOpenAI(
             openai_api_key=config.openai_api_key,
             openai_api_base=config.openai_api_base,
             model_name=config.model_name,
-            temperature=1.0,
-            max_completion_tokens=max_tokens,
+            temperature=temperature,
+            max_tokens=max_tokens,
         )
-    return ChatOpenAI(
-        openai_api_key=config.openai_api_key,
-        openai_api_base=config.openai_api_base,
-        model_name=config.model_name,
-        temperature=temperature,
-        max_tokens=max_tokens,
-    )
+    elif config.llm_provider == "mistral":
+        # TODO: Add Mistral LLM instantiation here
+        raise NotImplementedError("Mistral provider not yet implemented")
+    elif config.llm_provider == "llama":
+        # TODO: Add Llama LLM instantiation here
+        raise NotImplementedError("Llama provider not yet implemented")
+    elif config.llm_provider == "deepseek":
+        # TODO: Add DeepSeek LLM instantiation here
+        raise NotImplementedError("DeepSeek provider not yet implemented")
+    elif config.llm_provider == "huggingface":
+        # TODO: Add HuggingFace LLM instantiation here
+        raise NotImplementedError("HuggingFace provider not yet implemented")
+    else:
+        raise ValueError(f"Unknown LLM provider: {config.llm_provider}")
 
 
 def identify_profile_with_agent(text: str) -> Dict[str, Any]:
@@ -195,21 +209,6 @@ def extract_with_agent(
 
     llm = _default_llm(temperature=1.0, max_tokens=1200)
 
-    # Load MCP configuration from environment variables
-    ENABLE_MCP = os.getenv("ENABLE_MCP", "false").lower() == "true"
-    mcp_servers: List[str] = []
-
-    allowlist_tools = []
-    blocklist_tools = []
-
-    if ENABLE_MCP:
-        mcp_server_cmd = os.getenv("MCP_SERVER_CMD", "")
-        mcp_server_args = os.getenv("MCP_SERVER_ARGS", "")
-        allowlist_tools = os.getenv("ALLOWLIST_TOOLS", "").split(",")
-        blocklist_tools = os.getenv("BLOCKLIST_TOOLS", "").split(",")
-
-        if mcp_server_cmd:
-            mcp_servers.append(f"{mcp_server_cmd} {mcp_server_args}")
 
     extractor = Agent(
         role="Information Extraction Specialist",
@@ -221,22 +220,7 @@ def extract_with_agent(
         llm=llm,
         allow_delegation=False,
         verbose=False,
-        mcp_servers=mcp_servers,  # Pass MCP servers here
     )
-
-    # Only set these attributes if they exist and have values
-    if allowlist_tools and allowlist_tools != [""]:
-        try:
-            extractor.allowlist_tools = allowlist_tools
-        except (AttributeError, ValueError):
-            # Agent doesn't support allowlist_tools, skip
-            pass
-    if blocklist_tools and blocklist_tools != [""]:
-        try:
-            extractor.blocklist_tools = blocklist_tools
-        except (AttributeError, ValueError):
-            # Agent doesn't support blocklist_tools, skip
-            pass
 
     truncated_text = text[:max_output_chars]
 
