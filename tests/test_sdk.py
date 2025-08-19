@@ -47,7 +47,10 @@ def test_sdk_posts_and_receives(tmp_path):
             if content_length:
                 _ = self.rfile.read(content_length)
 
-            body = b'{"classification": {"type": "invoice", "confidence": 0.9}, "data": {"invoice_number": "INV-1"}}'
+            body = (
+                b'{"classification": {"type": "invoice", "confidence": 0.9}, '
+                b'"data": {"invoice_number": "INV-1"}}'
+            )
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))

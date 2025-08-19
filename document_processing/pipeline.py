@@ -79,9 +79,6 @@ from .config import validate_config
 from .doc_classifier import (
     ClassificationResult,
     DocumentType,
-    classify_document,
-    classify_document_from_image,
-    classify_document_openai,
     get_instructions_for_type,
 )
 from .doc_extractor import extract_fields, extract_fields_from_image

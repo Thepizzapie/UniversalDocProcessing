@@ -1,5 +1,4 @@
 from unittest.mock import patch
-from document_processing.pipeline import run_pipeline
 from document_processing.doc_classifier import DocumentType
 
 
