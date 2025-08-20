@@ -47,6 +47,7 @@ def main():
         # Start the document processing API service
         logger.info("Starting Document AI Framework API...")
         import uvicorn
+
         try:
             # Attempt to start MCP helper if configured. This is non-blocking and
             # only starts an external process when enabled in config.
@@ -70,11 +71,7 @@ def main():
         except Exception:
             # Fallback: run uvicorn directly if MCP helper is not available
             uvicorn.run(
-                "service.api:app",
-                host="127.0.0.1",
-                port=8080,
-                reload=False,
-                log_level="info"
+                "service.api:app", host="127.0.0.1", port=8080, reload=False, log_level="info"
             )
 
     except KeyboardInterrupt:

@@ -58,6 +58,7 @@ def get_vector_db_connector(config):
     else:
         raise ValueError(f"Unknown vector DB provider: {config.vector_db_provider}")
 
+
 def get_embedding_model(config):
     if config.embedding_provider == "openai":
         # TODO: Add OpenAI embedding model
@@ -71,6 +72,7 @@ def get_embedding_model(config):
     else:
         raise ValueError(f"Unknown embedding provider: {config.embedding_provider}")
 
+
 def get_text_extractor(config):
     if config.text_extractor_provider == "llmwhisperer":
         # TODO: Add LLMWhisperer extractor
@@ -83,6 +85,7 @@ def get_text_extractor(config):
         return None
     else:
         raise ValueError(f"Unknown text extractor provider: {config.text_extractor_provider}")
+
 
 __all__ = ["run_pipeline"]
 
@@ -186,8 +189,8 @@ def run_pipeline(
             # Use agent classifier to confirm
             classification = (
                 classify_with_agent(json.dumps(profile))
-                if use_agents else
-                ClassificationResult(type=matched_type, confidence=1.0)
+                if use_agents
+                else ClassificationResult(type=matched_type, confidence=1.0)
             )
             logger.info(
                 "pipeline: classified document as %s (conf=%.3f)",

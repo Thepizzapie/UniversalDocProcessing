@@ -208,7 +208,6 @@ def extract_with_agent(
 
     llm = _default_llm(temperature=1.0, max_tokens=1200)
 
-
     extractor = Agent(
         role="Information Extraction Specialist",
         goal="Produce a strictly valid JSON object following the provided instructions.",

@@ -3,6 +3,7 @@
 Provides synchronous and asynchronous helpers to call the `/classify-extract`
 endpoint. Uses httpx for requests.
 """
+
 from __future__ import annotations
 
 from typing import Optional, Dict, Any
