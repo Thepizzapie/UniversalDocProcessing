@@ -69,7 +69,13 @@ def main():
             asyncio.run(_run())
         except Exception:
             # Fallback: run uvicorn directly if MCP helper is not available
-            uvicorn.run("service.api:app", host="127.0.0.1", port=8080, reload=False, log_level="info")
+            uvicorn.run(
+                "service.api:app",
+                host="127.0.0.1",
+                port=8080,
+                reload=False,
+                log_level="info"
+            )
 
     except KeyboardInterrupt:
         logger.info("Service stopped by user.")

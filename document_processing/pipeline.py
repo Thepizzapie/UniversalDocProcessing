@@ -1,3 +1,50 @@
+"""
+pipeline
+========
+
+This module exposes a high‑level ``run_pipeline`` function that takes a
+document (either as a file on disk or as bytes) and returns a
+classification plus structured extraction results.  It orchestrates the
+components from ``doc_classifier`` and ``doc_extractor`` without
+requiring any knowledge of the underlying CrewAI implementation used in
+the original example.
+
+The pipeline works as follows:
+
+1. Perform OCR on the document to extract text for classification.
+2. Call the classifier to determine the document type and confidence.
+3. Look up extraction instructions for the predicted type.
+4. Run the LLM extractor on the text with the instructions.
+5. Return a dictionary containing the classification and extraction
+   results.
+
+This function is used by the FastAPI service but can also be imported
+directly into other Python code for programmatic use.
+
+"""
+
+import json
+import logging
+import tempfile
+import time
+from pathlib import Path
+from typing import Dict, Optional, Union
+
+from .agents import (
+    classify_with_agent,
+    extract_with_agent,
+    identify_profile_with_agent,
+    refine_extraction_with_agent,
+)
+from .config import validate_config
+from .doc_classifier import (
+    ClassificationResult,
+    DocumentType,
+    get_instructions_for_type,
+)
+from .doc_extractor import extract_fields, extract_fields_from_image
+
+
 def get_vector_db_connector(config):
     if config.vector_db_provider == "pgvector":
         # TODO: Add PGVector connector
@@ -36,52 +83,6 @@ def get_text_extractor(config):
         return None
     else:
         raise ValueError(f"Unknown text extractor provider: {config.text_extractor_provider}")
-"""
-pipeline
-========
-
-This module exposes a high‑level ``run_pipeline`` function that takes a
-document (either as a file on disk or as bytes) and returns a
-classification plus structured extraction results.  It orchestrates the
-components from ``doc_classifier`` and ``doc_extractor`` without
-requiring any knowledge of the underlying CrewAI implementation used in
-the original example.
-
-The pipeline works as follows:
-
-1. Perform OCR on the document to extract text for classification.
-2. Call the classifier to determine the document type and confidence.
-3. Look up extraction instructions for the predicted type.
-4. Run the LLM extractor on the text with the instructions.
-5. Return a dictionary containing the classification and extraction
-   results.
-
-This function is used by the FastAPI service but can also be imported
-directly into other Python code for programmatic use.
-
-"""
-
-
-import json
-import logging
-import tempfile
-import time
-from pathlib import Path
-from typing import Dict, Optional, Union
-
-from .agents import (
-    classify_with_agent,
-    extract_with_agent,
-    identify_profile_with_agent,
-    refine_extraction_with_agent,
-)
-from .config import validate_config
-from .doc_classifier import (
-    ClassificationResult,
-    DocumentType,
-    get_instructions_for_type,
-)
-from .doc_extractor import extract_fields, extract_fields_from_image
 
 __all__ = ["run_pipeline"]
 
@@ -174,7 +175,6 @@ def run_pipeline(
     else:
         try:
             # Compare profile to doc_types.json
-            doc_types = get_instructions_for_type
             # Find best match (simple string match for now, can be improved)
             config_types = [dt for dt in DocumentType]
             best_match = DocumentType.OTHER
@@ -184,7 +184,11 @@ def run_pipeline(
                     break
             matched_type = best_match
             # Use agent classifier to confirm
-            classification = classify_with_agent(json.dumps(profile)) if use_agents else ClassificationResult(type=matched_type, confidence=1.0)
+            classification = (
+                classify_with_agent(json.dumps(profile))
+                if use_agents else
+                ClassificationResult(type=matched_type, confidence=1.0)
+            )
             logger.info(
                 "pipeline: classified document as %s (conf=%.3f)",
                 classification.type.value,
