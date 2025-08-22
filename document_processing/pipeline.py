@@ -305,12 +305,12 @@ def run_pipeline(
         result.setdefault("errors", []).append(
             {
                 "code": "E_NO_CONFIDENCE_NO_DATA",
-                "message": ("Classification confidence is zero and no fields were " "extracted"),
+                "message": ("Classification confidence is zero and no fields were extracted"),
             }
         )
         result.setdefault(
             "message",
-            ("Classification confidence is zero and no fields were " "extracted"),
+            ("Classification confidence is zero and no fields were extracted"),
         )
     if return_text:
         result["raw_text"] = text
