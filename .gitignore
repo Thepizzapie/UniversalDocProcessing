@@ -1,29 +1,5 @@
 # Python
 __pycache__/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.venv/
-
-# Build artifacts
-build/
-dist/
-*.egg-info/
-
-# Coverage
-.coverage*
-coverage.xml
-htmlcov/
-
-# IDE/editor
-.vscode/
-.idea/
-
-# OS
-*.DS_Store
-Thumbs.db
-# Python
-__pycache__/
 *.py[cod]
 *$py.class
 *.so
@@ -40,80 +16,74 @@ parts/
 sdist/
 var/
 wheels/
+pip-wheel-metadata/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
 
 # Virtual environments
-.env
-.venv
-env/
 venv/
+env/
 ENV/
+.venv/
+.env/
 env.bak/
 venv.bak/
 
-# IDE
+# Environment variables and configuration
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+config.json
+!.env.example
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+app.db
+test.db
+
+# IDE and Editor files
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-
-# Secrets & API Keys
-.env
-*.key
-*.pem
-
-# Databases
-*.db
-*.sqlite
-*.sqlite3
-demo.db
+.DS_Store
 
 # Logs
 *.log
 logs/
 
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Node.js (for test web app)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+build/
+dist/
 
 # Temporary files
-*.tmp
-*.temp
+tmp/
 temp/
+*.tmp
 
-# Testing artifacts (keep tests/ directory)
-.coverage
-.pytest_cache/
-htmlcov/
-.tox/
-
-# Demo web app - not part of core framework
-demo_web/
-
-# Developer utilities not needed by client
-scripts/
-requirements.minimal.txt
-setup.py
-setup.bat
-
-docs/_build/
-
-# Keep JSON config tracked; ignore legacy YAML (already removed)
-document_processing/config/doc_types.yaml
-
-# Ensure docs are tracked (do not ignore)
-!README.md
-!CODE_OF_CONDUCT.md
-!CONTRIBUTING.md
-!LICENSE
-!pyproject.toml
-
+# OS generated files
+Thumbs.db
+.DS_Store

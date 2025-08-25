@@ -1,580 +1,261 @@
-# Document AI Framework
+# Document Extraction and Reconciliation (DER) Pipeline
 
-> AI-only document classification and extraction service (Vision + Chat)
+> **⚠️ Work in Progress**: This project is under active development. Not all features may be fully functional at this time.
 
-## What This Framework Does
-
-- **Document Processing**: Upload any invoice, receipt, or custom document as image/PDF
-- **AI-Powered**: Classification + extraction using OpenAI (`MODEL_NAME` for text processing, `VISION_MODEL_NAME` for image analysis)
-- **Plug-and-Play**: Integrate into your existing backend with minimal code changes
-- **Structured Output**: Get clean JSON data ready for your database
-- **Configurable**: Add new document types by updating simple JSON instructions
-- **Production Ready**: Health checks, rate limiting, auth tokens, and concurrency limits
-
-## Quick Start
-
-### 1) Install dependencies
-```bash
-pip install -r requirements.txt
-
-# Optional: Install CrewAI for advanced agent functionality (may have dependency conflicts)
-# pip install -r config/requirements-crewai.txt
-```
-
-### 2) Configure environment
-Create a `.env` file (see `config/env.example`):
-```env
-OPENAI_API_KEY=sk-your-key-here
-MODEL_NAME=gpt-5
-VISION_MODEL_NAME=gpt-4o
-OPENAI_API_BASE_URL=https://api.openai.com/v1
-MAX_CONCURRENCY=4
-RATE_LIMIT_PER_MIN=60
-```
-
-### 3) Start the service
-```bash
-python main.py
-```
-
-### 4) Try it
-```bash
-# Single document processing
-curl -X POST -F "file=@sample.pdf" http://localhost:8080/classify-extract
-
-# Check service health
-curl http://localhost:8080/health
-
-```
-
-## How It Works
-
-### Processing flow (AI-only)
-
-1. Classification: Uses vision models to classify documents directly from images/PDFs
-2. Extraction: Extract structured fields using JSON-based instructions via vision models
-3. Vision Fallback: Primary extraction method uses OpenAI Vision API for image understanding
-4. Output: JSON suitable for your backend
-
-**Note**: This framework is designed as AI-only by default. OCR libraries are included for future enhancement but are not currently active in the pipeline.
-
-```json
-{
-  "classification": { "type": "invoice", "confidence": 0.95 },
-  "data": {
-    "invoice_number": "INV-2024-001",
-    "vendor_name": "Acme Corp",
-    "total_amount": 1250.00,
-    "invoice_date": "2024-01-15"
-  }
-}
-```
-
-## Integration Guide
-
-### Using the Python SDK (Recommended)
-
-**Easy integration with the Python client:**
-
-```python
-from sdk.client import DocAI
-
-# Initialize client
-client = DocAI("http://localhost:8080", token="your-api-token")
-
-# Process a document
-result = client.classify_extract(file_path="/path/to/invoice.pdf")
-print(f"Document type: {result['classification']['type']}")
-print(f"Extracted data: {result['data']}")
-
-# Async processing
-result = await client.classify_extract_async(file_path="/path/to/document.pdf")
-```
-
-### Direct Pipeline Integration
-
-**Embed directly into your backend:**
-
-```python
-from document_processing.pipeline import run_pipeline
-
-@app.post("/process-document")
-async def process_document(file: UploadFile):
-    result = await asyncio.to_thread(run_pipeline, file.file.read())
-    return result["data"]  # Clean structured data
-```
-
-### Database Integration
-
-**Map extracted data to your existing tables:**
-
-```python
-# Your existing database model
-invoice = Invoice(
-    number=extractedData.get('invoice_number'),
-    vendor=extractedData.get('vendor_name'),
-    amount=extractedData.get('total_amount'),
-    date=extractedData.get('invoice_date')
-)
-db.save(invoice)
-```
-
-## API Endpoints
-
-### Core Processing Endpoints
-
-#### `POST /classify-extract`
-Process a single document and return structured data.
-
-**Parameters:**
-- `file`: Document file (multipart upload)
-- `file_url`: Alternative URL to document
-- `doc_type`: Force specific document type (optional)
-- `use_agents`: Enable CrewAI agents (default: true)
-- `refine`: Enable refinement pass (default: true)
-- `callback_url`: Async processing callback (optional)
-
-**Response:**
-```json
-{
-  "classification": {
-    "type": "invoice",
-    "confidence": 0.95
-  },
-  "data": {
-    "invoice_number": "INV-2024-001",
-    "vendor_name": "Acme Corp",
-    "total_amount": 1250.00,
-    "invoice_date": "2024-01-15"
-  }
-}
-```
-
-#### `POST /classify-extract-batch`
-Process multiple documents concurrently.
-
-**Parameters:**
-- `files`: Array of document files
-- `doc_type`: Force specific document type (optional)
-- `use_agents`: Enable CrewAI agents (default: true)
-- `refine`: Enable refinement pass (default: true)
-
-### Health Endpoint
-
-#### `GET /health`
-Basic health check for load balancers and monitoring.
-
-## Environment Configuration
-
-Core configuration for the Document AI Framework:
-
-```bash
-
-# LLM Provider Configuration
-LLM_PROVIDER=openai        # openai, deepseek, mistral, llama, huggingface, etc.
-LLM_API_BASE_URL=...       # API base for LLM provider
-LLM_MODEL_NAME=...         # Model name for LLM
-
-# Embedding Model Configuration
-EMBEDDING_PROVIDER=openai  # huggingface, ollama, custom
-EMBEDDING_API_BASE_URL=...
-EMBEDDING_MODEL_NAME=...
-
-# Vector Database Configuration
-VECTOR_DB_PROVIDER=pgvector   # chromadb, weaviate, etc.
-VECTOR_DB_URL=...
-VECTOR_DB_API_KEY=...
-
-# Text Extractor Configuration
-TEXT_EXTRACTOR_PROVIDER=llmwhisperer   # unstructured, llamaparse, etc.
-TEXT_EXTRACTOR_API_BASE_URL=...
-
-# OpenAI Configuration (default)
-OPENAI_API_KEY=sk-your-key-here                    # Required: OpenAI API key
-MODEL_NAME=gpt-5                                   # Chat model for text processing
-VISION_MODEL_NAME=gpt-4o                           # Vision model for image processing
-OPENAI_API_BASE_URL=https://api.openai.com/v1     # OpenAI API base URL
-
-# Processing Limits
-MAX_CONCURRENCY=4                                  # Concurrent processing limit
-RATE_LIMIT_PER_MIN=60                             # API rate limiting
-MAX_FILE_SIZE_MB=15                               # Maximum file size
-
-# Security & Authentication
-ALLOWED_TOKENS=token1,token2,token3               # Comma-separated API tokens
-ALLOW_FILE_URLS=true                              # Allow processing from URLs
-
-# Optional: Distributed Rate Limiting
-REDIS_URL=redis://localhost:6379                  # Redis for distributed rate limiting
-```
-
-## Document Type Configuration (JSON)
-
-### Setting Up Instructions for Your Document Types
-
-The framework uses a JSON file to define what data to extract from each document type. This is where the magic happens!
-
-#### 1. Edit the Configuration File
-
-Open `document_processing/config/doc_types.json` and add your document types. Each type contains:
-- `description`: human description
-- `instructions.schema`: keys to extract with descriptions
-- `instructions.guidelines`: bullet points the model should follow
-- `profile`: optional keywords/likely fields
-
-```json
-{
-  "purchase_order": {
-    "description": "Purchase Order document",
-    "instructions": {
-      "schema": {
-        "po_number": "Purchase order number",
-        "vendor_name": "Supplier company name",
-        "order_date": "Date the order was placed (YYYY-MM-DD)",
-        "delivery_date": "Expected delivery date (YYYY-MM-DD)",
-        "total_amount": "Total dollar amount (numeric)",
-        "line_items": "Array of items being ordered with description, quantity, unit_price, amount"
-      },
-      "guidelines": [
-        "Extract numeric values as numbers, not strings",
-        "Normalize dates to YYYY-MM-DD when possible",
-        "Parse line_items as an array of objects"
-      ]
-    },
-    "profile": {
-      "keywords": ["purchase order", "PO", "vendor", "delivery"],
-      "likely_fields": ["po_number", "vendor_name", "total_amount"],
-      "confidence_hints": ["presence of 'PO' or 'Purchase Order' in title"]
-    }
-  },
-  "shipping_label": {
-    "description": "Shipping label",
-    "instructions": {
-      "schema": {
-        "tracking_number": "Package tracking number",
-        "sender_name": "Name of sender",
-        "recipient_name": "Name of recipient",
-        "delivery_address": "Full delivery address",
-        "weight": "Package weight (numeric value with units)",
-        "service_type": "Shipping service (overnight, ground, etc.)"
-      },
-      "guidelines": [
-        "Extract tracking number as string",
-        "Include full address with city, state, zip",
-        "Convert weight to standard units if possible"
-      ]
-    },
-    "profile": {
-      "keywords": ["tracking", "delivery", "shipping", "address"],
-      "likely_fields": ["tracking_number", "delivery_address", "weight"],
-      "confidence_hints": ["barcode present", "shipping service logos"]
-    }
-  }
-}
-```
-
-#### 2. Update the Document Types Enum
-
-Add your new document type to `document_processing/doc_classifier.py`:
-
-```python
-class DocumentType(str, Enum):
-    INVOICE = "invoice"
-    RECEIPT = "receipt" 
-    LOAD_SHEET = "load_sheet"
-    PURCHASE_ORDER = "purchase_order"      # Add your new type
-    SHIPPING_LABEL = "shipping_label"      # Add your new type
-```
-
-#### 3. Test Your New Document Type
-
-```bash
-curl -X POST \
-  -F "file=@purchase_order.pdf" \
-  -F "doc_type=purchase_order" \
-  http://localhost:8080/classify-extract
-```
-
-### Pro Tips for Writing Instructions
-
-- **Be specific**: Use exact field names you want in the output JSON
-- **Include examples**: "Format dates as YYYY-MM-DD"
-- **Handle variations**: "Total amount could be labeled as 'Total', 'Amount Due', or 'Grand Total'"
-- **Set data types**: "Return numeric values for amounts, not strings"
-
-## Scaling Your Implementation
-
-### Horizontal Scaling
-
-**1. Multiple API Instances**
-```bash
-# Run multiple instances behind a load balancer
-uvicorn service.api:app --host 0.0.0.0 --port 8080 --workers 4
-```
-
-### Performance Optimization
-
-**1. Async Processing for High Volume**
-```python
-# Handle multiple documents concurrently
-@app.post("/process-batch")
-async def process_batch(files: List[UploadFile]):
-    tasks = [
-        asyncio.to_thread(run_pipeline, file.file.read()) 
-        for file in files
-    ]
-    results = await asyncio.gather(*tasks)
-    return results
-```
-
-**2. Caching for Repeated Documents**
-```python
-# Cache results based on file hash
-import hashlib
-from functools import lru_cache
-
-@lru_cache(maxsize=1000)
-def process_cached(file_hash: str, file_content: bytes):
-    return run_pipeline(file_content)
-```
-
-**3. Database Optimization**
-```python
-# Bulk insert for high volume
-def save_batch(extracted_documents):
-    Invoice.objects.bulk_create([
-        Invoice(**doc_data) for doc_data in extracted_documents
-    ])
-```
-
-## OCR (Future Enhancement)
-
-The current implementation is **AI-only** and uses OpenAI Vision models for direct image understanding. OCR libraries are included in the dependencies for future enhancement but are not currently active in the processing pipeline.
-
-### Current Vision-Based Approach
-
-The framework directly processes images and PDFs using:
-- **OpenAI Vision API** for image classification and extraction
-- **PDF to image conversion** for PDF processing
-- **No intermediate OCR text step** - works directly with visual content
-
-### OCR Integration (Future)
-
-If you want to add OCR support:
-
-**1. Install OCR Dependencies**
-```bash
-# Ubuntu/Debian
-sudo apt-get install tesseract-ocr poppler-utils
-
-# macOS  
-brew install tesseract poppler
-
-# Windows
-# Download Tesseract from: https://github.com/UB-Mannheim/tesseract/wiki
-# Download Poppler from: https://github.com/oschwartz10612/poppler-windows
-```
-
-**2. Configure OCR Paths (Windows)**
-```env
-OCR_ENABLED=true
-TESSERACT_CMD=C:\\Program Files\\Tesseract-OCR\\tesseract.exe
-POPPLER_PATH=C:\\path\\to\\poppler\\bin
-```
-
-**3. Modify Pipeline**
-Update `pipeline.py` to enable OCR text extraction before vision processing.
-
-### Benefits of Current Vision Approach
-
-- **No OCR preprocessing** required
-- **Better handling of complex layouts** (tables, forms, mixed content)
-- **Direct understanding** of visual elements like logos, signatures
-- **Robust with poor quality scans** or photographed documents
-
-## Architecture Overview
-
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Your Frontend │────│  Document AI API │────│  OpenAI Model    │
-│   (File Upload) │    │   (This Framework)│    │   (gpt-5)        │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-                                │
-                                ▼
-                       ┌──────────────────┐
-                       │  Your Database   │
-                       │ (Structured Data)│
-                       └──────────────────┘
-```
-
-### Core Components
-
-- **`document_processing/`**: AI processing engine with classification and extraction
-- **`service/`**: Production-ready REST API with monitoring and health checks
-- **`sdk/`**: Python client library for easy integration
-- **`tests/`**: Comprehensive test suite for quality assurance
+An automated document processing system that extracts, validates, and reconciles structured data from any document type using AI and machine learning technologies. The system leverages intelligent agents to handle diverse document formats and integrates with internal databases for streamlined data processing workflows.
 
 ## Project Structure
 
-```
-document_ai_framework/
-│
-├── document_processing/     # Core AI processing logic
-│   ├── config/
-│   │   └── doc_types.json   # Document type definitions
-│   ├── config.py            # Configuration management
-│   ├── doc_classifier.py    # Document classification
-│   ├── doc_extractor.py     # Data extraction
-│   ├── pipeline.py          # Processing pipeline
-│   └── agents.py            # AI agent implementations
-│
-├── service/                 # FastAPI web service
-│   └── api.py               # REST API endpoints (includes /health)
-│
-├── sdk/                     # Python client SDK
-│   └── client.py            # Easy-to-use API client
-│
-├── tests/                   # Test suite
-│   ├── test_api.py          # API endpoint tests
-│   ├── test_classifier.py   # Classification tests
-│   ├── test_extractor.py    # Extraction tests
-│   ├── test_pipeline.py     # Pipeline tests
-│   └── test_sdk.py          # SDK tests
-│
-├── config/                  # Configuration files
-│   ├── env.example          # Environment variable template
-│   └── requirements-crewai.txt # Optional CrewAI dependencies
-│
-├── docs/                    # Documentation
-│   ├── CODE_OF_CONDUCT.md   # Community standards
-│   └── LICENSE              # MIT license
-│
-├── .github/                 # CI/CD workflows
-│   ├── workflows/           # GitHub Actions
-│   └── dependabot.yml       # Dependency automation
-│
-├── Dockerfile               # Container definition
-├── requirements.txt         # Core dependencies
-├── pyproject.toml           # Package metadata
-├── README.md                # Main documentation
-└── main.py                  # Entry point
-```
+This repository contains two main components:
 
-## Testing & Development
+### 🔧 **DER Pipeline** (`der_pipeline/`)
+Core backend API built with FastAPI that provides document processing capabilities. Standalone pipeline that can be deployed independently.
 
-### Running Tests
+### 🎨 **Test Web Application** (`test_web_app/`)
+React-based testing interface that provides document processing workflow management and debugging tools.
+
+## Overview
+
+The DER Pipeline handles the complete lifecycle of document processing for any document type a user needs processed, from initial ingestion through final approval and database integration. The system uses AI agents that can adapt to process any document format, whether invoices, receipts, contracts, forms, or custom business documents.
+
+**Key AI Agent Capabilities:**
+- **Universal Document Processing**: AI agents automatically adapt to extract data from any document type without predefined templates
+- **Intelligent Field Extraction**: Agents identify and extract relevant fields based on document context and user-defined schemas
+- **External Data Integration**: Agents fetch and validate data from external sources to enhance reconciliation accuracy
+- **Database Integration**: Processed data can be seamlessly integrated into internal database systems
+- **Adaptive Learning**: Agents improve extraction accuracy through processing experience and user corrections
+
+The pipeline implements a five-stage workflow with intelligent agents handling extraction, human-in-the-loop validation, automated external data fetching, and AI-powered reconciliation for data accuracy and completeness.
+
+## Architecture
+
+### Core Components
+
+**Backend API (FastAPI)**
+- RESTful API endpoints for each pipeline stage
+- SQLModel-based data persistence with SQLite
+- Integration with OpenAI GPT models for intelligent processing
+- CrewAI agents for universal document analysis and processing
+- External data source integration capabilities
+- Database export and integration endpoints
+
+**Frontend Interface (React)**
+- Interactive web interface for document management
+- Real-time pipeline status monitoring
+- Human review and correction capabilities
+- AI debugging and analysis tools
+
+**Intelligence Layer**
+- AI agents capable of processing any document type without predefined templates
+- RAG (Retrieval Augmented Generation) knowledge base for contextual processing
+- Dynamic document type classification and adaptive field extraction
+- AI-powered debugging and performance analysis
+- Semantic search for reference data matching and external data integration
+- Intelligent reconciliation agents for data validation and conflict resolution
+
+### Pipeline Stages
+
+1. **Ingestion**: AI agents analyze and process any document type automatically
+2. **Human-in-the-Loop (HIL)**: Manual review and correction of agent-extracted data
+3. **Fetch**: AI agents retrieve comparative data from external sources and APIs
+4. **Reconciliation**: Intelligent agents compare, validate, and resolve data conflicts
+5. **Finalization**: Final approval with automated export to internal database systems
+
+## Document Types
+
+While the AI agents can process any document type, the system includes optimized processing for common business document categories:
+
+**Invoices**
+- Vendor information and contact details
+- Line item extraction with quantities and pricing
+- Tax calculations and payment terms
+- Invoice numbering and date validation
+
+**Receipts**
+- Merchant identification and transaction details
+- Item-level purchase information
+- Payment method and amount verification
+- Receipt numbering and timestamp extraction
+
+**Entry/Exit Logs**
+- Personnel identification and access tracking
+- Location and time-based validation
+- Authorization verification
+- Badge and vehicle information processing
+
+## Key Features
+
+### Universal AI Document Processing
+AI agents use advanced language models including GPT-4o with vision capabilities to automatically process any document type without requiring predefined templates or schemas. The agents adapt to extract relevant structured data from text and image documents, learning to identify important fields based on document context and user requirements. Supports direct OCR processing of scanned documents and images through OpenAI's vision API, making it possible to process any document format a user needs.
+
+### AI Agent Reconciliation & External Data Integration
+Intelligent reconciliation agents automatically fetch and validate data from external sources and APIs to enhance accuracy. The agents can integrate with internal database systems and external data providers to cross-reference extracted information. A vector-based RAG knowledge repository stores reference data for improved reconciliation accuracy, allowing agents to learn from previous processing decisions and maintain context-aware reference documents for better matching.
+
+### AI-Powered Debugging
+Comprehensive debugging tools analyze each pipeline stage, providing insights into extraction quality, reconciliation mismatches, and performance bottlenecks. The system offers actionable recommendations for improving processing accuracy.
+
+### Human-in-the-Loop Validation
+When automatic extraction confidence falls below defined thresholds, documents are routed for human review. The interface provides intuitive correction tools with confidence scoring and field-level validation.
+
+### Audit Trail
+Complete processing history tracking with state transitions, user actions, and system decisions. All modifications are logged with timestamps and actor identification for compliance and quality assurance.
+
+## Technology Stack
+
+**Backend Technologies**
+- Python 3.8+ with FastAPI framework
+- SQLModel for database operations and schema management
+- LangChain for LLM integration and prompt engineering
+- CrewAI for multi-agent document processing workflows
+- OpenAI GPT models (GPT-4o) with vision capabilities for text and image processing
+- Sentence Transformers for vector embeddings and semantic search
+
+**Frontend Technologies**
+- React 18 with modern hooks and functional components
+- Tailwind CSS for responsive design and styling
+- Axios for API communication
+- Lucide React for consistent iconography
+- React Router for client-side navigation
+
+**Infrastructure**
+- SQLite for development and testing environments
+- RESTful API design with OpenAPI documentation
+- Cross-origin resource sharing (CORS) support
+- Structured logging with audit capabilities
+
+## Quick Start
+
+### Prerequisites
+- Python 3.8 or higher
+- Node.js 16 or higher
+- OpenAI API key for language model access
+
+### 1. Start the DER Pipeline (Backend)
 ```bash
-# Full test suite
-python -m pytest tests/
+cd der_pipeline
 
-# Test document processing
-python -m pytest tests/test_pipeline.py
-
-# Test API endpoints
-python -m pytest tests/test_api.py
-```
-
-### Development Setup
-```bash
-# Install dependencies and dev tools
+# Install Python dependencies
 pip install -r requirements.txt
-pip install pytest pytest-asyncio
 
-# Format code
-black document_processing/ service/ sdk/
+# Configure environment variables
+echo "OPENAI_API_KEY=your_api_key_here" > .env
 
-# Lint code  
-ruff check document_processing/ service/ sdk/
+# Initialize the database
+python -c "from app.db import create_tables; create_tables()"
+
+# Start the API server
+python -m app.main
 ```
 
-## Deployment Options
-
-### Option 1: Simple Server
+### 2. Start the Test Web Application (Frontend)
 ```bash
-uvicorn service.api:app --host 0.0.0.0 --port 8080
+cd test_web_app
+
+# Install Node.js dependencies
+npm install
+
+# Start the development server
+npm start
 ```
 
-### Option 2: Docker
+The test application will be available at `http://localhost:3000` with the API running on `http://localhost:8080`.
+
+### 3. One-Command Startup (Optional)
 ```bash
-docker build -t doc-ai-framework .
-docker run -p 8080:8080 -e OPENAI_API_KEY=your-key doc-ai-framework
+# Start both components with a single command
+python start.py
 ```
 
-### Option 3: Cloud Deployment
-```bash
-# Heroku
-git push heroku main
+This will automatically start both the DER Pipeline API and Test Web Application.
 
-# AWS/GCP/Azure
-# Use the included Dockerfile for container deployment
-```
+## Component Documentation
 
+For detailed setup and usage instructions:
+- **DER Pipeline**: See `der_pipeline/README.md` for API documentation, deployment, and integration
+- **Test Web App**: See `test_web_app/README.md` for UI features, development, and testing workflows
 
+## Startup Scripts
 
-## Use Cases
+The project includes convenient startup scripts:
+- **`start.py`** - Master script that starts both components
+- **`der_pipeline/start.py`** - Starts only the API backend
+- **`test_web_app/start.js`** - Starts only the React frontend
 
-This framework is perfect for:
+## Usage
 
-- **Invoice Processing**: Automate accounts payable
-- **Receipt Management**: Expense tracking systems  
-- **Load Sheet Processing**: Logistics and freight management
-- **Shipping Labels**: Package tracking and fulfillment
-- **Purchase Orders**: Procurement automation
-- **Medical Forms**: Healthcare document processing
-- **Financial Documents**: Banking and insurance
-- **Any Custom Document**: Just update the JSON configuration!
+### Document Processing Workflow
 
-## Contributing
+1. **Upload Any Document Type**: Use the web interface to upload any document format - text files, images (JPG, PNG), PDFs, or custom business documents. AI agents automatically adapt to process the document without requiring predefined templates.
 
-We welcome contributions!
+2. **Type Classification**: Select or allow automatic detection of document type to enable specialized processing workflows.
 
-## License
+3. **Review Extractions**: Monitor automatic extraction results and provide corrections when confidence scores indicate potential issues.
 
-MIT - see `LICENSE`.
+4. **External Data Integration**: AI agents automatically fetch and validate data from configured external sources and APIs for comparative analysis.
 
-## Security & Authentication
+5. **Agent Reconciliation**: Intelligent agents automatically compare, validate, and resolve data conflicts using AI-powered analysis and recommendations.
 
-- Bearer token support is built-in (set `ALLOWED_TOKENS` in `.env`).
-- For OAuth2/OpenID Connect, place a reverse proxy (e.g. NGINX, API Gateway) in front of this service to validate tokens and forward authenticated requests with a `Bearer` token header. Provide examples in deployment configs.
-- Distributed rate limiting: set `REDIS_URL` to enable Redis-backed per-IP limits. For multi-region or Kubernetes, use a global Redis/ElastiCache or API Gateway rate-limiting.
+6. **Database Integration**: Final approval triggers automated export and integration with internal database systems, complete with audit trail documentation.
 
-## OCR Integration (How-To)
+### Knowledge Base Management
 
-If the vision-only approach struggles with certain scans, you can enable OCR.
+The RAG interface allows:
+- Adding reference documents for improved reconciliation accuracy
+- Searching existing knowledge base entries using semantic similarity
+- Tagging and categorizing reference data for efficient retrieval
+- Seeding the system with sample data for testing and validation
 
-1) Install OCR dependencies
-```bash
-# Ubuntu/Debian
-sudo apt-get install tesseract-ocr poppler-utils
+### Debugging and Analysis
 
-# macOS
-brew install tesseract poppler
+AI-powered debugging tools provide:
+- Analysis of extraction quality and improvement opportunities
+- Review of reconciliation mismatches and processing strategies
+- Examination of human correction patterns for model training insights
+- Monitoring of pipeline performance and processing bottlenecks
 
-# Windows
-# Tesseract: https://github.com/UB-Mannheim/tesseract/wiki
-# Poppler:   https://github.com/oschwartz10612/poppler-windows
-```
+## Configuration
 
-2) Configure OCR in `.env`
-```env
-OCR_ENABLED=true
-TESSERACT_CMD=/usr/bin/tesseract   # or Windows path
-POPPLER_PATH=/usr/local/bin        # where pdfimages/pdftoppm live
-```
+### Environment Variables
+- `OPENAI_API_KEY`: Required for AI processing capabilities (supports GPT-4o vision)
+- `DATABASE_URL`: SQLite database connection string  
+- `DEBUG`: Enable debug logging and verbose output
+- `CREWAI_ENABLED`: Toggle CrewAI agent processing
+- `LLM_MODEL`: AI model selection (gpt-4o, gpt-5, gpt-5-nano)
+- `LLM_TEMPERATURE`: AI response variability (0.0-1.0)
 
-3) Pipeline hook (example)
-```python
-from document_processing.ocr import to_text  # implement a helper that uses pytesseract/pdfminer
+### Web-Based Configuration
+The Settings page in the web interface provides:
+- AI model selection and parameter configuration
+- Custom extraction instructions per document type
+- Custom field and schema definitions for JSON output
+- Processing confidence threshold adjustment
+- OpenAI API key management
 
-text = to_text(file_path)  # use when OCR_ENABLED is true before calling classification
-```
+### Processing Parameters
+- Confidence thresholds for human review routing
+- Reconciliation strategies (strict, loose, fuzzy matching)
+- External API timeout and retry configurations
+- Document type templates and validation rules
 
-4) Troubleshooting
-- Ensure the binaries are on PATH.
-- For PDFs, convert to images before OCR or use pdfminer.
+## API Documentation
 
----
+The system provides comprehensive API documentation through OpenAPI specifications. Access the interactive documentation at `http://localhost:8080/docs` when the server is running.
 
+Key endpoint categories:
+- Document ingestion and management
+- Human-in-the-loop operations
+- External data fetching and integration
+- Reconciliation and conflict resolution
+- Reporting and audit trail access
+- Knowledge base and debugging tools
 
+## Development
 
+The project follows standard software development practices with modular architecture and comprehensive testing. The codebase uses clear separation of concerns with dedicated modules for data models, business logic, API endpoints, and user interface components.
 
+Development features include:
+- Type hints and documentation for all public interfaces
+- Unit tests for core business logic
+- Integration tests for API endpoints
+- Code formatting with industry-standard tools
+- Comprehensive logging for debugging and monitoring

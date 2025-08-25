@@ -1,9 +1,0 @@
-# Optional CrewAI dependencies for advanced agent functionality
-# Install with: pip install -r requirements-crewai.txt
-# Note: May have dependency conflicts with other packages
-
-crewai>=0.28.0
-
-# These may need to be downgraded for CrewAI compatibility:
-# pydantic<2.0.0
-# langchain<0.2.0
