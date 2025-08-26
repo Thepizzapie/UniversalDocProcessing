@@ -83,6 +83,7 @@ export const apiService = {
   seedRagSampleData: () => api.post('/rag/seed-sample-data'),
   
   // Debugging
+  dryRunExtraction: (documentId, data) => api.post(`/debug/dry-run/${documentId}`, data),
   debugExtraction: (documentId, data) => api.post(`/debug/extraction/${documentId}`, data),
   debugReconciliation: (documentId, data) => api.post(`/debug/reconciliation/${documentId}`, data),
   debugHilFeedback: (documentId, data) => api.post(`/debug/hil/${documentId}`, data),

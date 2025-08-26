@@ -45,14 +45,31 @@ async def get_hil_data(
 
     # Prepare response
     extracted = None
+    extracted_full = None
     if correction_data["extraction"]:
+        raw_json = correction_data["extraction"].raw_json or {}
+        # Support new structured payload with instructed_fields + all_fields
+        instructed = raw_json.get("instructed_fields")
+        all_fields = raw_json.get("all_fields")
+        source_for_extracted = instructed if isinstance(instructed, dict) else raw_json
+        source_for_full = all_fields if isinstance(all_fields, dict) else raw_json
+
         extracted = {
             k: {
-                "value": v["value"],
-                "confidence": v["confidence"],
-                "type_hint": v["type_hint"],
+                "value": v.get("value") if isinstance(v, dict) else None,
+                "confidence": v.get("confidence") if isinstance(v, dict) else None,
+                "type_hint": v.get("type_hint") if isinstance(v, dict) else None,
             }
-            for k, v in correction_data["extraction"].raw_json.items()
+            for k, v in source_for_extracted.items()
+        }
+
+        extracted_full = {
+            k: {
+                "value": v.get("value") if isinstance(v, dict) else None,
+                "confidence": v.get("confidence") if isinstance(v, dict) else None,
+                "type_hint": v.get("type_hint") if isinstance(v, dict) else None,
+            }
+            for k, v in source_for_full.items()
         }
 
     corrected = None
@@ -71,6 +88,7 @@ async def get_hil_data(
         document_id=document_id,
         current_state=document.state,
         extracted=extracted,
+        extracted_full=extracted_full,
         corrected=corrected,
     )
 

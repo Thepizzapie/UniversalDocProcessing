@@ -2,7 +2,7 @@
 
 import base64
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -79,8 +79,8 @@ def ingest_document(
 async def ingest_uploaded_file(
     request: Request,
     file: UploadFile = File(...),
-    mime_type: str | None = None,
-    document_type: str | None = None,
+    mime_type: str | None = Form(None),
+    document_type: str | None = Form(None),
     # current_user=Depends(get_current_active_user),  # Temporarily disabled for testing
 ):
     """Ingest a document via file upload."""
@@ -111,12 +111,19 @@ async def ingest_uploaded_file(
     # Convert document_type string to enum
     from ..enums import DocumentType
 
+    print(f"DEBUG: Received document_type parameter: '{document_type}'")
+    print(f"DEBUG: Type of document_type: {type(document_type)}")
+    
     doc_type = DocumentType.UNKNOWN
     if document_type:
         try:
             doc_type = DocumentType(document_type)
-        except ValueError:
+            print(f"DEBUG: Successfully converted to enum: {doc_type}")
+        except ValueError as e:
+            print(f"DEBUG: Failed to convert '{document_type}' to DocumentType enum: {e}")
             doc_type = DocumentType.UNKNOWN
+    else:
+        print("DEBUG: No document_type provided, defaulting to UNKNOWN")
 
     return ingest_document(
         request,

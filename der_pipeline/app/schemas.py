@@ -73,6 +73,7 @@ class HilResponse(BaseModel):
     document_id: int
     current_state: PipelineState
     extracted: dict[str, ExtractedField] | None = None
+    extracted_full: dict[str, ExtractedField] | None = None
     corrected: dict[str, CorrectedField] | None = None
     confidence_threshold: float = 0.8
 
@@ -266,6 +267,24 @@ class DebugResponse(BaseModel):
     ai_analysis: dict[str, Any]
     recommendations: list[str]
     confidence_score: float | None = None
+
+
+class DebugRunRequest(BaseModel):
+    """Request to perform a dry-run extraction for debugging."""
+
+    document_type_override: str | None = None
+    use_vision: bool = True
+    sample_text: str | None = None
+
+
+class DebugRunResponse(BaseModel):
+    """Response from a dry-run extraction."""
+
+    used_document_type: str
+    fields: dict[str, ExtractedField]
+    prompt_chars: int | None = None
+    content_chars: int | None = None
+    notes: str | None = None
 
 
 # Enhanced Document Reports

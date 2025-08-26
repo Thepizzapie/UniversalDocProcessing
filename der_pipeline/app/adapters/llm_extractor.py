@@ -59,7 +59,7 @@ def extract_fields(text: str, doc_type: str, model: str | None = None) -> dict[s
         for field, data in extracted_data.items():
             if isinstance(data, dict) and "value" in data:
                 result[field] = {"value": data["value"], "confidence": data.get("confidence", 0.8)}
-            else:
+        else:
                 # Handle simple value format
                 result[field] = {"value": data, "confidence": 0.8}
 
