@@ -3,6 +3,7 @@
 import os
 import json
 
+
 def test_openai_connection():
     """Test the OpenAI API connection with the stored API key"""
     try:
@@ -12,11 +13,11 @@ def test_openai_connection():
             print("ERROR: config.json not found")
             return False
 
-        with open(config_file, 'r') as f:
+        with open(config_file, "r") as f:
             config = json.load(f)
 
-        api_key = config.get('openai_api_key')
-        model = config.get('llm_model', 'gpt-4o')
+        api_key = config.get("openai_api_key")
+        model = config.get("llm_model", "gpt-4o")
 
         if not api_key:
             print("ERROR: No API key found in config.json")
@@ -39,7 +40,7 @@ def test_openai_connection():
             model=model,
             messages=[{"role": "user", "content": "Say 'Hello, API is working!'"}],
             max_tokens=50,
-            temperature=0.1
+            temperature=0.1,
         )
 
         result = response.choices[0].message.content.strip()
@@ -49,6 +50,7 @@ def test_openai_connection():
     except Exception as e:
         print(f"ERROR: API connection failed: {e}")
         return False
+
 
 if __name__ == "__main__":
     success = test_openai_connection()

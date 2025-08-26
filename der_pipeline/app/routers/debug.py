@@ -1,10 +1,10 @@
 """AI debugging API routes."""
 
-from typing import List
+
 from fastapi import APIRouter, HTTPException, status
 
-from ..services.debug_service import debug_service
 from ..schemas import DebugRequest, DebugResponse
+from ..services.debug_service import debug_service
 
 router = APIRouter(prefix="/api/debug", tags=["debug"])
 
@@ -18,7 +18,7 @@ async def debug_extraction(document_id: int, request: DebugRequest):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to debug extraction: {str(e)}"
+            detail=f"Failed to debug extraction: {str(e)}",
         )
 
 
@@ -31,7 +31,7 @@ async def debug_reconciliation(document_id: int, request: DebugRequest):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to debug reconciliation: {str(e)}"
+            detail=f"Failed to debug reconciliation: {str(e)}",
         )
 
 
@@ -44,7 +44,7 @@ async def debug_hil_feedback(document_id: int, request: DebugRequest):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to debug HIL feedback: {str(e)}"
+            detail=f"Failed to debug HIL feedback: {str(e)}",
         )
 
 
@@ -57,11 +57,11 @@ async def debug_pipeline_performance(document_id: int, request: DebugRequest):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to debug performance: {str(e)}"
+            detail=f"Failed to debug performance: {str(e)}",
         )
 
 
-@router.get("/history/{document_id}", response_model=List[DebugResponse])
+@router.get("/history/{document_id}", response_model=list[DebugResponse])
 async def get_debug_history(document_id: int):
     """Get debug analysis history for a document."""
     try:
@@ -69,5 +69,5 @@ async def get_debug_history(document_id: int):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get debug history: {str(e)}"
+            detail=f"Failed to get debug history: {str(e)}",
         )

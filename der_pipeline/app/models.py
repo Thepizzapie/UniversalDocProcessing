@@ -3,8 +3,8 @@
 from datetime import datetime
 from typing import Any
 
-from sqlmodel import Field, JSON, Relationship, SQLModel
 from sqlalchemy import Column
+from sqlmodel import JSON, Field, Relationship, SQLModel
 
 from .enums import ActorType, Decision, DocumentType, FetchStatus, PipelineState, ReconcileStrategy
 
@@ -26,9 +26,7 @@ class Document(SQLModel, table=True):
     extractions: list["Extraction"] = Relationship(back_populates="document")
     hil_corrections: list["HilCorrection"] = Relationship(back_populates="document")
     fetch_jobs: list["FetchJob"] = Relationship(back_populates="document")
-    reconciliation_results: list["ReconciliationResult"] = Relationship(
-        back_populates="document"
-    )
+    reconciliation_results: list["ReconciliationResult"] = Relationship(back_populates="document")
     final_decisions: list["FinalDecision"] = Relationship(back_populates="document")
     audit_trail: list["AuditTrail"] = Relationship(back_populates="document")
 
@@ -160,3 +158,21 @@ class DebugSession(SQLModel, table=True):
     ai_analysis: dict[str, Any] = Field(sa_column=Column(JSON))
     recommendations: list[str] = Field(sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+# Import User model from auth to ensure it's registered
+from .auth import User  # noqa: E402
+
+__all__ = [
+    "Document",
+    "Extraction",
+    "HilCorrection",
+    "FetchJob",
+    "ReconciliationResult",
+    "FinalDecision",
+    "AuditTrail",
+    "RagDocument",
+    "DocumentTypeTemplate",
+    "DebugSession",
+    "User",
+]

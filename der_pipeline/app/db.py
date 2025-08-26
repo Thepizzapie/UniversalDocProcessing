@@ -1,19 +1,24 @@
 """Database connection and setup."""
 
-from sqlmodel import Session, create_engine
 from sqlalchemy.engine import Engine
+from sqlmodel import Session, create_engine
 
 from .config import settings
 
 
 def get_engine() -> Engine:
     """Get SQLAlchemy engine with connection pooling."""
+    # Use PostgreSQL if available, otherwise SQLite
+    database_url = settings.postgres_url if settings.postgres_url else settings.database_url
+
+    connect_args = {}
+    if "sqlite" in database_url:
+        connect_args = {"check_same_thread": False}
+
     return create_engine(
-        settings.database_url,
+        database_url,
         echo=settings.debug,
-        connect_args=(
-            {"check_same_thread": False} if "sqlite" in settings.database_url else {}
-        ),
+        connect_args=connect_args,
     )
 
 

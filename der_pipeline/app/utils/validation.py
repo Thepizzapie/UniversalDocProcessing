@@ -1,7 +1,7 @@
 """Validation utilities for document processing."""
 
-from typing import Any
 from datetime import datetime
+from typing import Any
 
 
 def validate_document_content(content: str, mime_type: str) -> bool:
@@ -39,7 +39,7 @@ def validate_extracted_fields(fields: dict[str, Any]) -> dict[str, list[str]]:
     # Common field validations
     if "amount" in fields:
         amount = fields["amount"]
-        if isinstance(amount, (int, float)):
+        if isinstance(amount, int | float):
             if amount < 0:
                 errors["amount"] = ["Amount cannot be negative"]
             elif amount > 999999.99:  # Reasonable upper limit
@@ -84,12 +84,10 @@ def validate_correction_fields(
             original_value = original_fields[field_name]
 
             # Check for suspicious changes
-            if isinstance(original_value, (int, float)) and isinstance(
-                corrected_value, (int, float)
+            if isinstance(original_value, int | float) and isinstance(
+                corrected_value, int | float
             ):
-                if (
-                    abs(corrected_value - original_value) / abs(original_value) > 1.0
-                ):  # 100% change
+                if abs(corrected_value - original_value) / abs(original_value) > 1.0:  # 100% change
                     errors.setdefault(field_name, []).append(
                         "Correction represents >100% change from original"
                     )

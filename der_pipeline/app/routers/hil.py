@@ -1,28 +1,32 @@
 """HIL router - Step 2 of the pipeline."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
+from ..auth import get_current_active_user, requires_role
 from ..db import get_session_sync
+from ..enums import PipelineState
 from ..models import Document
 from ..schemas import HilResponse, HilUpdateRequest, HilUpdateResponse
-from ..enums import PipelineState
 from ..services.hil_service import HilService, apply_document_corrections
 
-
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 
 
 @router.get("/hil/{document_id}", response_model=HilResponse)
-async def get_hil_data(document_id: int):
+async def get_hil_data(
+    document_id: int,
+    current_user=Depends(get_current_active_user),
+):
     """Get current HIL data for a document."""
 
     # Check if document exists and is in correct state
     with get_session_sync() as session:
         document = session.get(Document, document_id)
         if not document:
-            raise HTTPException(
-                status_code=404, detail=f"Document {document_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Document {document_id} not found")
 
         if document.state not in (
             PipelineState.HIL_REQUIRED,
@@ -72,12 +76,17 @@ async def get_hil_data(document_id: int):
 
 
 @router.post("/hil/{document_id}", response_model=HilUpdateResponse)
-async def update_hil_corrections(document_id: int, request: HilUpdateRequest):
+@requires_role("reviewer", "admin")
+async def update_hil_corrections(
+    document_id: int,
+    request: HilUpdateRequest,
+    current_user=Depends(get_current_active_user),
+):
     """Apply human corrections to a document."""
 
     try:
         # Apply corrections
-        correction = apply_document_corrections(
+        apply_document_corrections(
             document_id=document_id,
             corrections=request.corrections,
             reviewer=request.reviewer,
@@ -87,7 +96,7 @@ async def update_hil_corrections(document_id: int, request: HilUpdateRequest):
         return HilUpdateResponse(
             document_id=document_id,
             state=PipelineState.HIL_CONFIRMED,
-            corrections_applied=len(request.corrections.__root__),
+            corrections_applied=len(request.corrections),
         )
 
     except ValueError as e:

@@ -4,7 +4,8 @@ import sys
 import os
 
 # Add the app directory to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "app"))
+
 
 def test_crew_initialization():
     """Test if the CrewAI crew can be initialized properly"""
@@ -25,8 +26,10 @@ def test_crew_initialization():
     except Exception as e:
         print(f"ERROR: Crew initialization failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
+
 
 if __name__ == "__main__":
     success = test_crew_initialization()

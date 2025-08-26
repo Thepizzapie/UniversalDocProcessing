@@ -1,16 +1,11 @@
 """RAG (Retrieval Augmented Generation) API routes."""
 
-from typing import List
+
 from fastapi import APIRouter, HTTPException, status
 
-from ..services.rag_service import rag_service
-from ..schemas import (
-    RagDocumentCreate,
-    RagDocumentResponse,
-    RagSearchRequest,
-    RagSearchResult
-)
 from ..enums import DocumentType
+from ..schemas import RagDocumentCreate, RagDocumentResponse, RagSearchRequest, RagSearchResult
+from ..services.rag_service import rag_service
 
 router = APIRouter(prefix="/api/rag", tags=["rag"])
 
@@ -23,11 +18,11 @@ async def create_rag_document(request: RagDocumentCreate):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create RAG document: {str(e)}"
+            detail=f"Failed to create RAG document: {str(e)}",
         )
 
 
-@router.get("/documents/{document_type}", response_model=List[RagDocumentResponse])
+@router.get("/documents/{document_type}", response_model=list[RagDocumentResponse])
 async def get_rag_documents_by_type(document_type: DocumentType):
     """Get all RAG documents of a specific type."""
     try:
@@ -35,11 +30,11 @@ async def get_rag_documents_by_type(document_type: DocumentType):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve RAG documents: {str(e)}"
+            detail=f"Failed to retrieve RAG documents: {str(e)}",
         )
 
 
-@router.post("/search", response_model=List[RagSearchResult])
+@router.post("/search", response_model=list[RagSearchResult])
 async def search_rag_documents(request: RagSearchRequest):
     """Search RAG documents using semantic similarity."""
     try:
@@ -47,7 +42,7 @@ async def search_rag_documents(request: RagSearchRequest):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to search RAG documents: {str(e)}"
+            detail=f"Failed to search RAG documents: {str(e)}",
         )
 
 
@@ -58,8 +53,7 @@ async def delete_rag_document(doc_id: int):
         success = rag_service.delete_rag_document(doc_id)
         if not success:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="RAG document not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="RAG document not found"
             )
         return {"message": "RAG document deleted successfully"}
     except HTTPException:
@@ -67,7 +61,7 @@ async def delete_rag_document(doc_id: int):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete RAG document: {str(e)}"
+            detail=f"Failed to delete RAG document: {str(e)}",
         )
 
 
@@ -80,5 +74,5 @@ async def seed_sample_data():
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to seed sample data: {str(e)}"
+            detail=f"Failed to seed sample data: {str(e)}",
         )

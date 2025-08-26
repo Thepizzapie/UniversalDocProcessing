@@ -3,15 +3,14 @@
 from fastapi import APIRouter, HTTPException
 
 from ..db import get_session_sync
+from ..enums import ReconcileStrategy
 from ..models import Document
 from ..schemas import DocumentReport, ReconcileResponse
-from ..enums import ReconcileStrategy
 from ..services.audit import AuditService
-from ..services.hil_service import HilService
 from ..services.fetch_service import FetchService
-from ..services.reconcile_service import ReconcileService
 from ..services.finalize_service import FinalizeService
-
+from ..services.hil_service import HilService
+from ..services.reconcile_service import ReconcileService
 
 router = APIRouter()
 
@@ -19,10 +18,10 @@ router = APIRouter()
 @router.get("/reports/documents")
 async def get_all_documents():
     """Get all documents with basic info."""
-    
+
     with get_session_sync() as session:
         documents = session.query(Document).order_by(Document.uploaded_at.desc()).all()
-        
+
         # Return basic document info for dashboard
         return [
             {
@@ -32,7 +31,7 @@ async def get_all_documents():
                 "state": doc.state.value,
                 "uploaded_at": doc.uploaded_at.isoformat(),
                 "mime_type": doc.mime_type,
-                "source_uri": doc.source_uri
+                "source_uri": doc.source_uri,
             }
             for doc in documents
         ]
@@ -45,9 +44,7 @@ async def get_document_report(document_id: int):
     with get_session_sync() as session:
         document = session.get(Document, document_id)
         if not document:
-            raise HTTPException(
-                status_code=404, detail=f"Document {document_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Document {document_id} not found")
 
     # Gather all document data
     hil_data = HilService.get_correction_data(document_id)
@@ -102,9 +99,7 @@ async def get_document_report(document_id: int):
         final_decision_response = {
             "document_id": document_id,
             "state": (
-                document.state.value
-                if document.state.name == "APPROVED"
-                else document.state.value
+                document.state.value if document.state.name == "APPROVED" else document.state.value
             ),
             "decision": final_decision.decision.value,
             "decider": final_decision.decider,
@@ -120,13 +115,17 @@ async def get_document_report(document_id: int):
         latest_extraction=latest_extraction,
         latest_correction=latest_correction,
         latest_fetch=fetch_data.get("response_payloads") if fetch_data else None,
-        latest_reconciliation=ReconcileResponse(
-            document_id=document_id,
-            state=document.state,
-            result=reconcile_data.get("results", []),
-            score_overall=reconcile_data.get("score_overall", 0.0),
-            strategy_used=reconcile_data.get("strategy", ReconcileStrategy.LOOSE)
-        ) if reconcile_data else None,
+        latest_reconciliation=(
+            ReconcileResponse(
+                document_id=document_id,
+                state=document.state,
+                result=reconcile_data.get("results", []),
+                score_overall=reconcile_data.get("score_overall", 0.0),
+                strategy_used=reconcile_data.get("strategy", ReconcileStrategy.LOOSE),
+            )
+            if reconcile_data
+            else None
+        ),
         final_decision=final_decision_response,
         audit_trail=formatted_audit,
     )

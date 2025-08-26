@@ -21,9 +21,7 @@ class FinalizeService:
                 raise ValueError(f"Document {document_id} not found")
 
             if document.state != PipelineState.RECONCILED:
-                raise ValueError(
-                    f"Document {document_id} is not ready for finalization"
-                )
+                raise ValueError(f"Document {document_id} is not ready for finalization")
 
             # Check if already finalized
             existing_decision = (

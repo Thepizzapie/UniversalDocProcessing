@@ -1,8 +1,8 @@
 """Example vendor external API adapter."""
 
-from typing import Any
 import asyncio
 import random
+from typing import Any
 
 from ...models import Document
 from ...schemas import FetchedRecord

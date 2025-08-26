@@ -3,11 +3,10 @@
 from fastapi import APIRouter, HTTPException
 
 from ..db import get_session_sync
+from ..enums import Decision, PipelineState
 from ..models import Document
 from ..schemas import FinalizeRequest, FinalizeResponse
-from ..enums import PipelineState, Decision
-from ..services.finalize_service import finalize_document_processing, FinalizeService
-
+from ..services.finalize_service import FinalizeService, finalize_document_processing
 
 router = APIRouter()
 
@@ -25,9 +24,7 @@ async def finalize_document(document_id: int, request: FinalizeRequest):
     with get_session_sync() as session:
         document = session.get(Document, document_id)
         if not document:
-            raise HTTPException(
-                status_code=404, detail=f"Document {document_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Document {document_id} not found")
 
         if document.state != PipelineState.RECONCILED:
             raise HTTPException(

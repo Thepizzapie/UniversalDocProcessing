@@ -162,7 +162,7 @@ class DocumentReport(BaseModel):
 # Document Type Specific Schemas
 class InvoiceData(BaseModel):
     """Invoice specific data schema."""
-    
+
     invoice_number: str
     vendor_name: str
     vendor_address: str | None = None
@@ -179,7 +179,7 @@ class InvoiceData(BaseModel):
 
 class ReceiptData(BaseModel):
     """Receipt specific data schema."""
-    
+
     merchant_name: str
     merchant_address: str | None = None
     transaction_date: str
@@ -194,7 +194,7 @@ class ReceiptData(BaseModel):
 
 class EntryExitLogData(BaseModel):
     """Entry/Exit log specific data schema."""
-    
+
     person_name: str
     person_id: str | None = None
     entry_time: str | None = None
@@ -209,7 +209,7 @@ class EntryExitLogData(BaseModel):
 # RAG System Schemas
 class RagDocumentCreate(BaseModel):
     """Request to create a RAG document."""
-    
+
     document_type: DocumentType
     reference_data: dict[str, Any]
     description: str | None = None
@@ -218,7 +218,7 @@ class RagDocumentCreate(BaseModel):
 
 class RagDocumentResponse(BaseModel):
     """Response for RAG document operations."""
-    
+
     id: int
     document_type: DocumentType
     reference_data: dict[str, Any]
@@ -230,7 +230,7 @@ class RagDocumentResponse(BaseModel):
 
 class RagSearchRequest(BaseModel):
     """Request to search RAG documents."""
-    
+
     query: str
     document_type: DocumentType | None = None
     limit: int = Field(default=10, le=50)
@@ -239,7 +239,7 @@ class RagSearchRequest(BaseModel):
 
 class RagSearchResult(BaseModel):
     """RAG search result."""
-    
+
     id: int
     reference_data: dict[str, Any]
     description: str | None = None
@@ -250,7 +250,7 @@ class RagSearchResult(BaseModel):
 # Debug System Schemas
 class DebugRequest(BaseModel):
     """Request for AI debugging analysis."""
-    
+
     stage: str
     debug_type: str
     input_data: dict[str, Any]
@@ -259,7 +259,7 @@ class DebugRequest(BaseModel):
 
 class DebugResponse(BaseModel):
     """Response from AI debugging analysis."""
-    
+
     session_id: int
     stage: str
     debug_type: str
@@ -271,10 +271,59 @@ class DebugResponse(BaseModel):
 # Enhanced Document Reports
 class DocumentListItem(BaseModel):
     """Document list item with type information."""
-    
+
     id: int
     filename: str
     document_type: DocumentType
     state: PipelineState
     uploaded_at: datetime
     confidence_score: float | None = None
+
+
+# Authentication Schemas
+class LoginRequest(BaseModel):
+    """User login request."""
+
+    email: str
+    password: str
+
+
+class RegisterRequest(BaseModel):
+    """User registration request."""
+
+    email: str
+    password: str
+    role: str = "user"
+
+
+class TokenResponse(BaseModel):
+    """JWT token response."""
+
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    user_id: int
+    email: str
+    role: str
+
+
+class UserResponse(BaseModel):
+    """User profile response."""
+
+    id: int
+    email: str
+    role: str
+    is_active: bool
+    created_at: datetime
+
+
+# Configuration Schema
+class ConfigResponse(BaseModel):
+    """Safe configuration information."""
+
+    app_env: str
+    llm_model: str
+    ocr_enabled: bool
+    crewai_enabled: bool
+    rate_limit_per_minute: int
+    cors_allow_origins: list[str]
