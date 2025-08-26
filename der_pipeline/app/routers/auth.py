@@ -135,4 +135,3 @@ async def read_users_me(current_user=Depends(get_current_active_user)):
         is_active=current_user.is_active,
         created_at=current_user.created_at,
     )
-

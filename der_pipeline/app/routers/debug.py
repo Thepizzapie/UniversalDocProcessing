@@ -1,6 +1,5 @@
 """AI debugging API routes."""
 
-
 from fastapi import APIRouter, HTTPException, status
 
 from ..schemas import DebugRequest, DebugResponse

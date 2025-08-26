@@ -164,4 +164,3 @@ def reconcile_document(self, document_id: int, strategy: str):
             )
 
         raise
-

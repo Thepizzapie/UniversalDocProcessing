@@ -178,4 +178,3 @@ def create_user(session: Session, email: str, password: str, role: str = "user")
     session.refresh(user)
 
     return user
-

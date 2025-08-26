@@ -118,4 +118,3 @@ def _generate_generic_data(document_data: dict[str, Any]) -> dict[str, Any]:
             "match_algorithm": "content_similarity",
         },
     }
-

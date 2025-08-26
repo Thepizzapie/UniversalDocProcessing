@@ -102,13 +102,14 @@ async def update_config(request: ConfigUpdateRequest):
 
     # Also update .env file for persistence
     update_env_file(config_data)
-    
+
     # Reload settings to pick up changes
     reload_settings()
-    
+
     # Reload CrewAI service if it exists
     try:
         from ..services.crewai_service import crewai_service
+
         crewai_service.reload_configuration()
         print("DEBUG: CrewAI service reloaded with new settings")
     except Exception as e:

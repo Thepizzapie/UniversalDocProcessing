@@ -1,6 +1,5 @@
 """RAG (Retrieval Augmented Generation) API routes."""
 
-
 from fastapi import APIRouter, HTTPException, status
 
 from ..enums import DocumentType

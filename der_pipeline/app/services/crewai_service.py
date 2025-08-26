@@ -24,9 +24,11 @@ class CrewAIService:
         """Initialize CrewAI with current settings."""
         current_settings = get_current_settings()
         self._enabled = current_settings.crewai_enabled
-        
+
         print(f"DEBUG: CrewAI enabled in settings: {self._enabled}")
-        print(f"DEBUG: OpenAI API key in settings: {'Yes' if current_settings.openai_api_key else 'No'}")
+        print(
+            f"DEBUG: OpenAI API key in settings: {'Yes' if current_settings.openai_api_key else 'No'}"
+        )
         print(f"DEBUG: LLM model: {current_settings.llm_model}")
 
         # Set OpenAI API key in environment if provided in settings
@@ -50,7 +52,7 @@ class CrewAIService:
         else:
             print("DEBUG: CrewAI not enabled in settings")
             self._crew = None
-    
+
     def reload_configuration(self):
         """Reload the service with updated settings."""
         print("DEBUG: Reloading CrewAI configuration...")

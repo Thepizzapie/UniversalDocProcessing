@@ -75,11 +75,13 @@ class Settings(BaseSettings):
 # Global settings instance
 settings = Settings()
 
+
 def reload_settings():
     """Reload settings from environment/files."""
     global settings
     settings = Settings()
     return settings
+
 
 def get_current_settings():
     """Get current settings (can be dynamically updated)."""

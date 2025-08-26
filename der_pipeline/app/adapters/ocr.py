@@ -168,4 +168,3 @@ def validate_ocr_dependencies() -> dict[str, Any]:
         status["error"] = str(e)
 
     return status
-

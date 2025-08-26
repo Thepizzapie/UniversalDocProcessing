@@ -110,19 +110,20 @@ async def ingest_uploaded_file(
 
     # Convert document_type string to enum
     from ..enums import DocumentType
+
     doc_type = DocumentType.UNKNOWN
     if document_type:
         try:
             doc_type = DocumentType(document_type)
         except ValueError:
             doc_type = DocumentType.UNKNOWN
-    
+
     return ingest_document(
         request,
         IngestRequest(
-            filename=file.filename, 
-            mime_type=mime_type, 
+            filename=file.filename,
+            mime_type=mime_type,
             content=actual_content,
-            document_type=doc_type
-        )
+            document_type=doc_type,
+        ),
     )

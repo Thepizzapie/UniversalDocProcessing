@@ -36,24 +36,22 @@ class ExtractionService:
 
         try:
             # Use CrewAI for extraction
-            extracted_fields = crewai_service.extract_document_data(text_content, doc_type)
-            if not extracted_fields:
+            extracted_record = crewai_service.extract_document_data(text_content, doc_type)
+            if not extracted_record:
                 logger.warning("CrewAI extraction returned empty results, using fallback")
-                extracted_fields = {"sample_field": {"value": "extracted_value", "confidence": 0.5}}
+                # Return a properly structured ExtractedRecord
+                fields = {"sample_field": ExtractedField(value="extracted_value", confidence=0.5, type_hint="text")}
+                return ExtractedRecord(root=fields)
+            
+            # CrewAI should return an ExtractedRecord directly
+            return extracted_record
         except Exception as e:
             logger.error(f"CrewAI extraction failed: {e}")
-            extracted_fields = {"error": {"value": f"Extraction failed: {str(e)}", "confidence": 0.1}}
+            # Return a properly structured ExtractedRecord for errors
+            fields = {"error": ExtractedField(value=f"Extraction failed: {str(e)}", confidence=0.1, type_hint="error")}
+            return ExtractedRecord(root=fields)
 
-        # Step 3: Convert to ExtractedRecord format
-        fields = {}
-        for field_name, field_data in extracted_fields.items():
-            fields[field_name] = ExtractedField(
-                value=field_data.get("value"),
-                confidence=field_data.get("confidence", 0.8),
-                type_hint=field_name,
-            )
 
-        return ExtractedRecord(root=fields)
 
     @staticmethod
     def _get_document_text(document: Document) -> str:

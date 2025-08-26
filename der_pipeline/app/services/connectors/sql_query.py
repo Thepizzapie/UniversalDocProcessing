@@ -129,4 +129,3 @@ def _simulate_generic_query(document_data: dict[str, Any]) -> list[dict[str, Any
             "metadata": {"source_system": "reference_db", "data_quality": "high"},
         }
     ]
-

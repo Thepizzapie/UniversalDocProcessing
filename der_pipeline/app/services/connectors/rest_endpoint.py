@@ -160,4 +160,3 @@ def fetch_data_sync(
             "error": str(e),
             "fetch_timestamp": "2024-08-24T10:30:00Z",
         }
-

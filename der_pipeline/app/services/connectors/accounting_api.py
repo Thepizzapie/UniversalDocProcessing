@@ -157,4 +157,3 @@ def _simulate_general_ledger_data(document_data: dict[str, Any]) -> dict[str, An
             "audit_flags": [],
         },
     }
-

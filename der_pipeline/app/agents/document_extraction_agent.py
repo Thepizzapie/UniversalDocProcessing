@@ -74,7 +74,6 @@ class DocumentExtractionAgent:
             - payment_terms: Payment terms (e.g., Net 30)
             - payment_method: How payment should be made
             """,
-            
             "RECEIPT": """
             You are an expert receipt analyst. Extract the following RECEIPT-specific information:
             
@@ -99,7 +98,6 @@ class DocumentExtractionAgent:
             - discount_amount: Any discounts applied
             - tip_amount: Tip amount if applicable
             """,
-            
             "ENTRY_EXIT_LOG": """
             You are an expert access control analyst. Extract the following ENTRY/EXIT LOG information:
             
@@ -121,7 +119,6 @@ class DocumentExtractionAgent:
             - escort_required: Whether escort was needed
             - duration: Total time on premises
             """,
-            
             "UNKNOWN": """
             You are analyzing a document of unknown type. Extract any relevant business information:
             
@@ -137,9 +134,9 @@ class DocumentExtractionAgent:
             - email: Any email addresses
             - reference_number: Any reference, ID, or tracking numbers
             - description: Brief description of document content
-            """
+            """,
         }
-        
+
         self.extraction_prompt = PromptTemplate(
             input_variables=["document_text", "document_type", "specific_instructions"],
             template="""
@@ -213,16 +210,19 @@ class DocumentExtractionAgent:
 
         print(f"DEBUG: DocumentExtractionAgent.extract_fields called with type: {document_type}")
         print(f"DEBUG: Text length: {len(document_text)}")
+        print(f"DEBUG: Available templates: {list(self.extraction_templates.keys())}")
 
         try:
             # Get document-type-specific instructions
-            specific_instructions = self.extraction_templates.get(document_type, self.extraction_templates["UNKNOWN"])
-            
+            specific_instructions = self.extraction_templates.get(
+                document_type, self.extraction_templates["UNKNOWN"]
+            )
+
             # Use the LLM directly with the prompt
             prompt_text = self.extraction_prompt.format(
-                document_text=document_text, 
+                document_text=document_text,
                 document_type=document_type,
-                specific_instructions=specific_instructions
+                specific_instructions=specific_instructions,
             )
 
             print(f"DEBUG: Using {document_type}-specific extraction instructions")
@@ -248,11 +248,11 @@ class DocumentExtractionAgent:
                 - confidence: Your confidence (0.0-1.0)  
                 - type_hint: Data type ("text", "number", "date", "currency", etc.)
                 """
-                
+
                 message = HumanMessage(
                     content=[
                         {
-                            "type": "text", 
+                            "type": "text",
                             "text": vision_prompt,
                         },
                         {
