@@ -3,36 +3,63 @@
 from datetime import datetime
 from typing import Any
 
+from loguru import logger
 
 from ..db import get_session_sync
-from ..enums import FetchStatus, PipelineState
+from ..enums import ActorType, FetchStatus, PipelineState
 from ..models import Document, FetchJob
 from ..schemas import FetchedRecord
 from .audit import log_audit_event
+from .connectors import accounting_api, dummy_json, rest_endpoint, sql_query
 
 
 class FetchService:
     """Service for fetching comparator data from external sources."""
 
     @staticmethod
-    async def fetch_external_data(target: str, document: Document) -> FetchedRecord:
-        """Fetch data from a specific external source."""
+    def fetch_external_data(target: str, document: Document) -> FetchedRecord:
+        """Fetch data from a specific external source using connector strategy."""
 
-        # Import here to avoid circular imports
-        from ..adapters.external_apis import get_external_api_adapter
+        # Prepare document data for connectors
+        document_data = {
+            "document_id": document.id,
+            "document_type": (
+                document.document_type.value
+                if hasattr(document.document_type, "value")
+                else str(document.document_type)
+            ),
+            "filename": document.filename,
+            "mime_type": document.mime_type,
+            "content_preview": document.content[:200] if document.content else None,
+        }
 
-        adapter = get_external_api_adapter(target)
-        if adapter:
-            return await adapter.fetch(document)
-        else:
-            # Return empty record if adapter not found
-            return FetchedRecord(
-                source=target,
-                payload={"error": f"No adapter found for target: {target}"},
-            )
+        try:
+            # Route to appropriate connector
+            if target == "dummy_json":
+                payload = dummy_json.fetch_data(document_data)
+            elif target == "accounting_api":
+                api_config = {"endpoint": "https://api.demo-accounting.com", "api_key": "demo_key"}
+                payload = accounting_api.fetch_data(api_config, document_data)
+            elif target.startswith("http"):
+                # REST endpoint
+                payload = rest_endpoint.fetch_data_sync(target, document_data)
+            elif target.startswith("postgresql://") or target.startswith("mysql://"):
+                # SQL query - extract query from target or use default
+                query = "SELECT * FROM validation_data WHERE document_type = %(document_type)s"
+                payload = sql_query.fetch_data(target, query, document_data)
+            else:
+                # Unknown target - use dummy data
+                logger.warning(f"Unknown fetch target: {target}, using dummy data")
+                payload = dummy_json.fetch_data(document_data)
+
+            return FetchedRecord(source=target, payload=payload)
+
+        except Exception as e:
+            logger.error(f"Fetch failed for target {target}: {e}")
+            return FetchedRecord(source=target, payload={"error": f"Fetch failed: {str(e)}"})
 
     @staticmethod
-    async def run_fetch(document_id: int, targets: list[str]) -> FetchJob:
+    def run_fetch(document_id: int, targets: list[str]) -> FetchJob:
         """Run fetch job for multiple targets."""
 
         with get_session_sync() as session:
@@ -60,7 +87,6 @@ class FetchService:
             session.refresh(fetch_job)
 
             # Update document state
-            old_state = document.state
             document.state = PipelineState.FETCH_PENDING
             session.commit()
 
@@ -70,9 +96,7 @@ class FetchService:
 
             for target in targets:
                 try:
-                    fetched_record = await FetchService.fetch_external_data(
-                        target, document
-                    )
+                    fetched_record = FetchService.fetch_external_data(target, document)
                     response_payloads[target] = {
                         "source": fetched_record.source,
                         "payload": fetched_record.payload,
@@ -104,6 +128,7 @@ class FetchService:
                         # Log audit event
                         log_audit_event(
                             document_id=document_id,
+                            actor_type=ActorType.SYSTEM,
                             action="fetch_completed",
                             from_state=old_doc_state,
                             to_state=PipelineState.FETCHED,
@@ -111,13 +136,10 @@ class FetchService:
                                 "fetch_job_id": fetch_job.id,
                                 "targets": targets,
                                 "successful_fetches": len(
-                                    [
-                                        r
-                                        for r in response_payloads.values()
-                                        if r["success"]
-                                    ]
+                                    [r for r in response_payloads.values() if r["success"]]
                                 ),
                             },
+                            session=session,
                         )
 
         except Exception as e:
@@ -137,10 +159,12 @@ class FetchService:
 
                     log_audit_event(
                         document_id=document_id,
+                        actor_type=ActorType.SYSTEM,
                         action="fetch_failed",
                         from_state=PipelineState.FETCH_PENDING,
                         to_state=PipelineState.FAILED,
                         payload={"error": str(e)},
+                        session=session,
                     )
 
             raise
@@ -169,18 +193,14 @@ class FetchService:
                 "targets": latest_fetch.targets,
                 "response_payloads": latest_fetch.response_payloads,
                 "started_at": (
-                    latest_fetch.started_at.isoformat()
-                    if latest_fetch.started_at
-                    else None
+                    latest_fetch.started_at.isoformat() if latest_fetch.started_at else None
                 ),
                 "finished_at": (
-                    latest_fetch.finished_at.isoformat()
-                    if latest_fetch.finished_at
-                    else None
+                    latest_fetch.finished_at.isoformat() if latest_fetch.finished_at else None
                 ),
             }
 
 
-async def fetch_comparator_data(document_id: int, targets: list[str]) -> FetchJob:
+def fetch_comparator_data(document_id: int, targets: list[str]) -> FetchJob:
     """Convenience function to fetch comparator data."""
-    return await FetchService.run_fetch(document_id, targets)
+    return FetchService.run_fetch(document_id, targets)

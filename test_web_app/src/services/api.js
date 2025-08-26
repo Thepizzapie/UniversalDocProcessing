@@ -39,10 +39,11 @@ export const apiService = {
   
   // Step 1: Ingest
   ingestDocument: (data) => api.post('/ingest', data),
-  uploadDocument: (file, mimeType) => {
+  uploadDocument: (file, mimeType, documentType) => {
     const formData = new FormData();
     formData.append('file', file);
     if (mimeType) formData.append('mime_type', mimeType);
+    if (documentType) formData.append('document_type', documentType);
     
     return api.post('/ingest/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
@@ -82,6 +83,7 @@ export const apiService = {
   seedRagSampleData: () => api.post('/rag/seed-sample-data'),
   
   // Debugging
+  dryRunExtraction: (documentId, data) => api.post(`/debug/dry-run/${documentId}`, data),
   debugExtraction: (documentId, data) => api.post(`/debug/extraction/${documentId}`, data),
   debugReconciliation: (documentId, data) => api.post(`/debug/reconciliation/${documentId}`, data),
   debugHilFeedback: (documentId, data) => api.post(`/debug/hil/${documentId}`, data),

@@ -52,12 +52,8 @@ class BaseExternalApiAdapter(ExternalApiAdapterInterface):
 
         return headers
 
-    @retry(
-        stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10)
-    )
-    async def _make_request(
-        self, method: str, endpoint: str, **kwargs
-    ) -> dict[str, Any]:
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
+    async def _make_request(self, method: str, endpoint: str, **kwargs) -> dict[str, Any]:
         """Make HTTP request with retry logic."""
         if not self.client:
             raise RuntimeError("Client not initialized. Use async context manager.")
@@ -75,9 +71,7 @@ class BaseExternalApiAdapter(ExternalApiAdapterInterface):
 
     async def fetch(self, document: Document) -> FetchedRecord:
         """Default fetch implementation - override in subclasses."""
-        return FetchedRecord(
-            source=self.__class__.__name__, payload={"error": "Not implemented"}
-        )
+        return FetchedRecord(source=self.__class__.__name__, payload={"error": "Not implemented"})
 
 
 def get_external_api_adapter(target: str) -> ExternalApiAdapterInterface:

@@ -65,8 +65,9 @@ const DocumentDetail = () => {
       
       // Initialize corrections with current extracted data
       const initialCorrections = {};
-      if (response.data.extracted) {
-        Object.entries(response.data.extracted).forEach(([key, field]) => {
+      if (response.data.extracted_full || response.data.extracted) {
+        const seed = response.data.extracted_full || response.data.extracted;
+        Object.entries(seed).forEach(([key, field]) => {
           initialCorrections[key] = {
             value: field.value,
             confidence: field.confidence,
@@ -286,6 +287,16 @@ const DocumentDetail = () => {
                     )}
                   </div>
                 ))}
+
+                {/* Full extraction viewer */}
+                {hilData.extracted_full && (
+                  <div className="mt-6">
+                    <h4 className="text-sm font-medium text-gray-900 mb-2">Full Extraction (raw)</h4>
+                    <pre className="bg-gray-50 p-3 rounded border text-xs whitespace-pre-wrap">
+                      {JSON.stringify(hilData.extracted_full, null, 2)}
+                    </pre>
+                  </div>
+                )}
                 
                 <button
                   onClick={handleHilUpdate}

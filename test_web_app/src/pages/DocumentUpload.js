@@ -74,12 +74,7 @@ const DocumentUpload = () => {
     setError('');
 
     try {
-      // Create form data with document type
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-      formData.append('document_type', documentType);
-      
-      const response = await apiService.uploadDocument(selectedFile, selectedFile.type);
+      const response = await apiService.uploadDocument(selectedFile, selectedFile.type, documentType);
       console.log('Upload response:', response.data);
       
       // Navigate to document detail page

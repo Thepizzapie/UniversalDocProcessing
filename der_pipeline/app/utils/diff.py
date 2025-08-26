@@ -24,7 +24,7 @@ def normalize_case(text: str) -> str:
 
 def normalize_currency(value: Any) -> float | None:
     """Normalize currency values to float."""
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return float(value)
 
     if isinstance(value, str):
@@ -62,8 +62,8 @@ def compare_text_loose(text1: str, text2: str) -> float:
     norm1 = normalize_case(normalize_whitespace(text1))
     norm2 = normalize_case(normalize_whitespace(text2))
     # Replace special characters with spaces
-    norm1 = re.sub(r'[^a-z0-9\s]', ' ', norm1)
-    norm2 = re.sub(r'[^a-z0-9\s]', ' ', norm2)
+    norm1 = re.sub(r"[^a-z0-9\s]", " ", norm1)
+    norm2 = re.sub(r"[^a-z0-9\s]", " ", norm2)
     # Normalize whitespace again
     norm1 = " ".join(norm1.split())
     norm2 = " ".join(norm2.split())

@@ -1,13 +1,14 @@
 """Document extraction service - Step 1 of the pipeline."""
 
 import requests
-from ..adapters.llm_extractor import extract_fields
-from ..enums import PipelineState
+from loguru import logger
+
+from ..services.crewai_service import crewai_service
+from ..db import get_session_sync
+from ..enums import ActorType, PipelineState
 from ..models import Document, Extraction
 from ..schemas import ExtractedField, ExtractedRecord
-from ..db import get_session_sync
 from .audit import log_audit_event
-from .crewai_service import crewai_service
 
 
 class ExtractionService:
@@ -17,87 +18,82 @@ class ExtractionService:
     def extract(document: Document) -> ExtractedRecord:
         """Extract fields from a document using OCR and/or LLM extraction."""
 
-        # Get actual document content - CHECK DOCUMENT.CONTENT FIRST!
-        text_content = document.content if hasattr(document, 'content') and document.content else ""
-        
-        print(f"DEBUG: Document.content length: {len(text_content) if text_content else 'None'}")
-        print(f"DEBUG: Document.content preview: {text_content[:100] if text_content else 'No content'}...")
-        
-        # If no direct content, try URL
-        if not text_content and hasattr(document, "source_uri") and document.source_uri:
-            print("DEBUG: No direct content, trying source_uri...")
-            import requests
-            try:
-                response = requests.get(document.source_uri, timeout=30)
-                if response.status_code == 200:
-                    # Try to extract text from the response
-                    if 'text' in response.headers.get('content-type', '').lower():
-                        text_content = response.text
-                    else:
-                        # For non-text files, use the URL as context
-                        text_content = f"Document from URL: {document.source_uri}\nFilename: {document.filename}\nContent-Type: {response.headers.get('content-type', 'unknown')}"
-                else:
-                    text_content = f"Could not fetch document from {document.source_uri}. Status: {response.status_code}"
-            except Exception as e:
-                text_content = f"Error fetching document from {document.source_uri}: {str(e)}"
-        
-        # ONLY generate sample content if we have absolutely no content
+        # Step 1: Get text content from document
+        text_content = ExtractionService._get_document_text(document)
+
         if not text_content:
-            print("DEBUG: No content found anywhere, generating sample content")
-            text_content = ExtractionService._generate_sample_content(document)
-        else:
-            print(f"DEBUG: Using actual content, length: {len(text_content)}")
+            logger.warning(f"No text content available for document {document.id}")
+            return ExtractedRecord(root={})
 
-        # FORCE AI extraction - no fallbacks for demo
-        doc_type = document.document_type.value if hasattr(document.document_type, 'value') else str(document.document_type)
+        # Step 2: Extract fields using CrewAI
+        doc_type = (
+            document.document_type.value
+            if hasattr(document.document_type, "value")
+            else str(document.document_type)
+        )
 
-        print(f"DEBUG: ========== EXTRACTION DEBUG START ==========")
-        print(f"DEBUG: Starting AI extraction for {doc_type}")
-        print(f"DEBUG: Text content length: {len(text_content)}")
-        print(f"DEBUG: Text preview: {text_content[:200]}...")
-        print(f"DEBUG: CrewAI service enabled: {crewai_service.is_enabled}")
+        logger.info(f"Starting CrewAI extraction for document {document.id}, type: {doc_type}")
 
         try:
-            # FORCE CrewAI agent extraction directly FIRST
-            print("DEBUG: ========== DIRECT AGENT CALL ==========")
-            from ..agents.document_extraction_agent import DocumentExtractionAgent
-            agent = DocumentExtractionAgent("gpt-4o")
-            print(f"DEBUG: Created DocumentExtractionAgent: {agent}")
-            
-            extracted_data = agent.extract_fields(text_content, doc_type)
-            print(f"DEBUG: Agent returned type: {type(extracted_data)}")
-            
-            if extracted_data and hasattr(extracted_data, 'root') and extracted_data.root:
-                print(f"DEBUG: SUCCESS! Agent extracted {len(extracted_data.root)} fields")
-                for key, field in extracted_data.root.items():
-                    print(f"DEBUG: - {key}: '{field.value}' (conf: {field.confidence})")
-                return extracted_data
-            else:
-                print("DEBUG: Agent returned empty/invalid data")
+            # Use CrewAI for extraction
+            raw_extracted = crewai_service.extract_document_data(text_content, doc_type)
+            if not raw_extracted:
+                logger.warning("CrewAI extraction returned empty results, using fallback")
+                fields = {"sample_field": ExtractedField(value="extracted_value", confidence=0.5, type_hint="text")}
+                raw_extracted = ExtractedRecord(root=fields)
 
+            # Conform output to the document-type instructions
+            expected_fields = ExtractionService._expected_fields_for_doc_type(doc_type)
+            conformed_fields: dict[str, ExtractedField] = {}
+
+            for field_name in expected_fields:
+                src = raw_extracted.root.get(field_name)
+                if isinstance(src, ExtractedField):
+                    conformed_fields[field_name] = src
+                else:
+                    conformed_fields[field_name] = ExtractedField(value=None, confidence=0.0, type_hint="text")
+
+            return ExtractedRecord(root=conformed_fields)
         except Exception as e:
-            print(f"DEBUG: ========== AGENT EXTRACTION FAILED ==========")
-            print(f"DEBUG: Error: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"CrewAI extraction failed: {e}")
+            fields = {"error": ExtractedField(value=f"Extraction failed: {str(e)}", confidence=0.1, type_hint="error")}
+            return ExtractedRecord(root=fields)
 
-        print(f"DEBUG: ========== USING FALLBACK ==========")
-        # Create a basic fallback with actual data
-        from ..schemas import ExtractedField, ExtractedRecord
-        fields = {
-            "document_type": ExtractedField(value=doc_type, confidence=0.9, type_hint="string"),
-            "filename": ExtractedField(value=document.filename or "unknown", confidence=0.9, type_hint="string"),
-            "extraction_error": ExtractedField(value="AI extraction completely failed", confidence=0.0, type_hint="string"),
-            "content_preview": ExtractedField(value=text_content[:100] if text_content else "No content", confidence=0.5, type_hint="string")
-        }
-        return ExtractedRecord(root=fields)
+
+
+    @staticmethod
+    def _get_document_text(document: Document) -> str:
+        """Extract text content from a document - simplified for CrewAI."""
+
+        # Use document content directly
+        if document.content:
+            logger.info("Using document content for CrewAI extraction")
+            return str(document.content)  # CrewAI can handle various formats
+
+        # Try to fetch from source URI
+        if document.source_uri:
+            try:
+                logger.info(f"Fetching content from URL: {document.source_uri}")
+                response = requests.get(document.source_uri, timeout=30)
+                response.raise_for_status()
+                return response.text
+            except Exception as e:
+                logger.error(f"Failed to fetch content from URL {document.source_uri}: {e}")
+
+        # Generate sample content as last resort
+        logger.warning("No content available, generating sample content for testing")
+        return ExtractionService._generate_sample_content(document)
 
     @staticmethod
     def _generate_sample_content(document: Document) -> str:
         """Generate realistic sample content based on document type for AI extraction."""
-        doc_type = document.document_type.value if hasattr(document.document_type, 'value') else str(document.document_type)
+        doc_type = (
+            document.document_type.value
+            if hasattr(document.document_type, "value")
+            else str(document.document_type)
+        )
         filename = document.filename or "document"
-        
+
         if doc_type == "INVOICE":
             return f"""INVOICE
 Invoice Number: INV-2024-{filename[-4:]}
@@ -196,16 +192,19 @@ Status: Active
     ) -> Extraction:
         """Create and save an extraction record."""
 
+        instructed_payload = {
+            k: {"value": v.value, "confidence": v.confidence, "type_hint": v.type_hint}
+            for k, v in extracted_data.items()
+        }
+
+        payload = {
+            "instructed_fields": instructed_payload,
+            "all_fields": instructed_payload,
+        }
+
         extraction = Extraction(
             document_id=document_id,
-            raw_json={
-                k: {
-                    "value": v.value,
-                    "confidence": v.confidence,
-                    "type_hint": v.type_hint,
-                }
-                for k, v in extracted_data.items()
-            },
+            raw_json=payload,
             provider=provider,
             confidence=0.8,  # Default confidence
         )
@@ -216,6 +215,64 @@ Status: Active
             session.refresh(extraction)
 
         return extraction
+
+    @staticmethod
+    def _expected_fields_for_doc_type(document_type: str) -> list[str]:
+        """Return required+optional field names for a given document type."""
+        doc_type = (document_type or "UNKNOWN").upper()
+        if doc_type == "INVOICE":
+            return [
+                "invoice_number",
+                "vendor_name",
+                "invoice_date",
+                "total_amount",
+                "currency",
+                "vendor_address",
+                "vendor_tax_id",
+                "due_date",
+                "subtotal",
+                "tax_amount",
+                "line_items",
+                "payment_terms",
+            ]
+        if doc_type == "RECEIPT":
+            return [
+                "merchant_name",
+                "transaction_date",
+                "total_amount",
+                "currency",
+                "merchant_address",
+                "transaction_time",
+                "tax_amount",
+                "payment_method",
+                "items",
+                "receipt_number",
+            ]
+        if doc_type == "ENTRY_EXIT_LOG":
+            return [
+                "person_name",
+                "location",
+                "person_id",
+                "entry_time",
+                "exit_time",
+                "purpose",
+                "authorized_by",
+                "badge_number",
+                "vehicle_info",
+            ]
+        return [
+            "document_type",
+            "date",
+            "amount",
+            "currency",
+            "company_name",
+            "person_name",
+            "address",
+            "phone_number",
+            "email",
+            "reference_number",
+            "description",
+        ]
 
     @staticmethod
     def process_document(document_id: int) -> ExtractedRecord:
@@ -242,6 +299,7 @@ Status: Active
             # Log audit event
             log_audit_event(
                 document_id=document_id,
+                actor_type=ActorType.SYSTEM,
                 action="extraction_completed",
                 from_state=old_state,
                 to_state=PipelineState.HIL_REQUIRED,

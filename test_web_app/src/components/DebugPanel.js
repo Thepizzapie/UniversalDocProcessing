@@ -7,6 +7,8 @@ const DebugPanel = ({ documentId, currentStage, documentData }) => {
   const [activeAnalysis, setActiveAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [docTypeOverride, setDocTypeOverride] = useState('');
+  const [dryRunResult, setDryRunResult] = useState(null);
 
   useEffect(() => {
     if (documentId) {
@@ -62,6 +64,23 @@ const DebugPanel = ({ documentId, currentStage, documentData }) => {
       await loadDebugHistory(); // Refresh history
     } catch (err) {
       console.error(`Debug analysis failed:`, err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const runDryRun = async () => {
+    setLoading(true);
+    setDryRunResult(null);
+    try {
+      const response = await apiService.dryRunExtraction(documentId, {
+        document_type_override: docTypeOverride || null,
+        use_vision: true,
+        sample_text: null,
+      });
+      setDryRunResult(response.data);
+    } catch (err) {
+      console.error('Dry-run failed:', err);
     } finally {
       setLoading(false);
     }
@@ -170,6 +189,36 @@ const DebugPanel = ({ documentId, currentStage, documentData }) => {
 
       {expanded && (
         <div className="mt-6 space-y-6">
+          {/* Dry-Run Extraction */}
+          <div className="p-4 border border-purple-200 rounded-lg bg-purple-50">
+            <div className="flex items-center justify-between">
+              <div className="font-medium text-purple-900">Dry-run extraction (no DB writes)</div>
+              <div className="flex items-center space-x-2">
+                <select
+                  className="input text-sm"
+                  value={docTypeOverride}
+                  onChange={(e) => setDocTypeOverride(e.target.value)}
+                >
+                  <option value="">Use document's type</option>
+                  <option value="INVOICE">INVOICE</option>
+                  <option value="RECEIPT">RECEIPT</option>
+                  <option value="ENTRY_EXIT_LOG">ENTRY_EXIT_LOG</option>
+                  <option value="UNKNOWN">UNKNOWN</option>
+                </select>
+                <button onClick={runDryRun} className="btn btn-primary" disabled={loading}>
+                  Run Dry-Run
+                </button>
+              </div>
+            </div>
+            {dryRunResult && (
+              <div className="mt-3 bg-white p-3 rounded border text-sm">
+                <div className="mb-2 text-gray-700">
+                  Used type: <span className="font-medium">{dryRunResult.used_document_type}</span>
+                </div>
+                <pre className="whitespace-pre-wrap text-gray-700">{JSON.stringify(dryRunResult.fields, null, 2)}</pre>
+              </div>
+            )}
+          </div>
           {/* Quick Analysis Buttons */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <button

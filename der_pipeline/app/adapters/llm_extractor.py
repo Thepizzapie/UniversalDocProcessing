@@ -1,182 +1,149 @@
 """LLM extraction interface and implementations."""
 
-from abc import ABC, abstractmethod
-from typing import Union
-import re
+import json
+from typing import Any
 
-from ..schemas import ExtractedField, ExtractedRecord
-from ..agents import DocumentExtractionAgent
+import openai
+from loguru import logger
 
-
-class LlmExtractorInterface(ABC):
-    """Interface for LLM-based field extraction."""
-
-    @abstractmethod
-    def extract_fields(self, text_or_content: Union[str, bytes]) -> ExtractedRecord:
-        """Extract structured fields from text or document content."""
-        pass
+from ..config import settings
 
 
-class EchoLlmExtractor(LlmExtractorInterface):
-    """Echo LLM extractor that creates synthetic demo data."""
+def extract_fields(text: str, doc_type: str, model: str | None = None) -> dict[str, Any]:
+    """Extract fields using OpenAI API.
 
-    def extract_fields(self, text_or_content: Union[str, bytes]) -> ExtractedRecord:
-        """Extract fields using synthetic demo logic."""
+    Args:
+        text: Document text to extract from
+        doc_type: Type of document (invoice, receipt, etc.)
+        model: OpenAI model to use (defaults to settings.llm_model)
 
-        # Convert bytes to string if needed
-        if isinstance(text_or_content, bytes):
-            text = text_or_content.decode("utf-8", errors="ignore")
+    Returns:
+        Dict mapping field names to {value, confidence} dicts
+    """
+    if not settings.openai_api_key:
+        logger.warning("OpenAI API key not configured, returning empty extraction")
+        return {}
+
+    model = model or settings.llm_model
+
+    # Configure OpenAI client
+    client = openai.OpenAI(api_key=settings.openai_api_key)
+
+    # Create document type specific prompts
+    prompts = {
+        "invoice": _get_invoice_prompt(),
+        "receipt": _get_receipt_prompt(),
+        "entry_exit_log": _get_entry_exit_log_prompt(),
+        "unknown": _get_generic_prompt(),
+    }
+
+    system_prompt = prompts.get(doc_type.lower(), prompts["unknown"])
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Extract fields from this document:\n\n{text}"},
+            ],
+            temperature=settings.llm_temperature,
+            max_tokens=settings.llm_max_tokens,
+        )
+
+        # Parse the JSON response
+        content = response.choices[0].message.content
+        extracted_data = json.loads(content)
+
+        # Ensure each field has value and confidence
+        result = {}
+        for field, data in extracted_data.items():
+            if isinstance(data, dict) and "value" in data:
+                result[field] = {"value": data["value"], "confidence": data.get("confidence", 0.8)}
         else:
-            text = text_or_content
+                # Handle simple value format
+                result[field] = {"value": data, "confidence": 0.8}
 
-        # Simple pattern matching for demo purposes
-        fields = {}
+        return result
 
-        # Try to extract common fields using regex
-        patterns = {
-            "invoice_number": r"(?:invoice|inv)[.\s*#]*([A-Z0-9\-]+)",
-            "date": r"(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
-            "amount": r"[$€£]?\s*(\d+[\.,]\d{2})",
-            "vendor": r"(?:from|vendor|company)[:\s]*([A-Za-z\s&]+)",
-            "customer": r"(?:to|customer|client)[:\s]*([A-Za-z\s&]+)",
-        }
-
-        for field_name, pattern in patterns.items():
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                fields[field_name] = ExtractedField(
-                    value=match.group(1).strip(), confidence=0.8, type_hint=field_name
-                )
-
-        # If no fields found, create synthetic demo data
-        if not fields:
-            fields = {
-                "invoice_number": ExtractedField(
-                    value="DEMO-001", confidence=0.9, type_hint="invoice_number"
-                ),
-                "date": ExtractedField(
-                    value="2024-01-15", confidence=0.85, type_hint="date"
-                ),
-                "amount": ExtractedField(
-                    value="1234.56", confidence=0.9, type_hint="amount"
-                ),
-                "vendor": ExtractedField(
-                    value="Demo Vendor Inc", confidence=0.7, type_hint="vendor"
-                ),
-                "customer": ExtractedField(
-                    value="Demo Customer Corp", confidence=0.8, type_hint="customer"
-                ),
-                "description": ExtractedField(
-                    value="Sample invoice for demo purposes",
-                    confidence=0.6,
-                    type_hint="description",
-                ),
-            }
-
-        return ExtractedRecord(root=fields)
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse LLM response as JSON: {e}")
+        return {}
+    except Exception as e:
+        logger.error(f"LLM extraction failed: {e}")
+        return {}
 
 
-class CrewAIExtractor(LlmExtractorInterface):
-    """CrewAI-powered document extractor using intelligent agents."""
+def _get_invoice_prompt() -> str:
+    """Get system prompt for invoice extraction."""
+    return """You are an expert at extracting structured data from invoices.
+Extract the following fields and return as JSON:
 
-    def __init__(self):
-        """Initialize the CrewAI extractor."""
-        try:
-            self.extraction_agent = DocumentExtractionAgent()
-        except Exception:
-            # Fallback to None if CrewAI initialization fails
-            self.extraction_agent = None
+{
+  "invoice_number": {"value": "...", "confidence": 0.9},
+  "vendor_name": {"value": "...", "confidence": 0.9},
+  "vendor_address": {"value": "...", "confidence": 0.8},
+  "vendor_tax_id": {"value": "...", "confidence": 0.8},
+  "invoice_date": {"value": "YYYY-MM-DD", "confidence": 0.9},
+  "due_date": {"value": "YYYY-MM-DD", "confidence": 0.8},
+  "subtotal": {"value": 100.00, "confidence": 0.9},
+  "tax_amount": {"value": 10.00, "confidence": 0.8},
+  "total_amount": {"value": 110.00, "confidence": 0.9},
+  "currency": {"value": "USD", "confidence": 0.9},
+  "payment_terms": {"value": "...", "confidence": 0.7}
+}
 
-    def extract_fields(self, text_or_content: Union[str, bytes]) -> ExtractedRecord:
-        """Extract fields using CrewAI agent or fallback method."""
-
-        # Convert bytes to string if needed
-        if isinstance(text_or_content, bytes):
-            text = text_or_content.decode("utf-8", errors="ignore")
-        else:
-            text = text_or_content
-
-        # Try CrewAI extraction first
-        if self.extraction_agent:
-            try:
-                return self.extraction_agent.extract_fields(text)
-            except Exception:
-                # Fall back to simple extraction if CrewAI fails
-                pass
-
-        # Fallback to simple pattern-based extraction
-        return self._fallback_extraction(text)
-
-    def _fallback_extraction(self, text: str) -> ExtractedRecord:
-        """Fallback extraction using simple key:value patterns."""
-        fields = {}
-
-        # Look for key:value patterns (case insensitive)
-        lines = text.split("\n")
-        for line in lines:
-            line = line.strip()
-            if ":" in line:
-                key, value = line.split(":", 1)
-                key = key.strip().lower().replace(" ", "_")
-                value = value.strip()
-
-                if key and value and len(value) > 0:
-                    fields[key] = ExtractedField(
-                        value=value, confidence=0.7, type_hint="text"
-                    )
-
-        # Fallback to echo extractor if no fields found
-        if not fields:
-            echo_extractor = EchoLlmExtractor()
-            return echo_extractor.extract_fields(text)
-
-        return ExtractedRecord(root=fields)
+Use null for missing fields. Confidence should be 0.0-1.0 based on how certain you are."""
 
 
-class SimpleTextParserExtractor(LlmExtractorInterface):
-    """Simple text parser that extracts key:value pairs."""
+def _get_receipt_prompt() -> str:
+    """Get system prompt for receipt extraction."""
+    return """You are an expert at extracting structured data from receipts.
+Extract the following fields and return as JSON:
 
-    def extract_fields(self, text_or_content: Union[str, bytes]) -> ExtractedRecord:
-        """Extract fields by parsing key:value patterns."""
+{
+  "merchant_name": {"value": "...", "confidence": 0.9},
+  "merchant_address": {"value": "...", "confidence": 0.8},
+  "transaction_date": {"value": "YYYY-MM-DD", "confidence": 0.9},
+  "transaction_time": {"value": "HH:MM:SS", "confidence": 0.8},
+  "total_amount": {"value": 25.50, "confidence": 0.9},
+  "tax_amount": {"value": 2.30, "confidence": 0.8},
+  "currency": {"value": "USD", "confidence": 0.9},
+  "payment_method": {"value": "...", "confidence": 0.8},
+  "receipt_number": {"value": "...", "confidence": 0.8}
+}
 
-        # Convert bytes to string if needed
-        if isinstance(text_or_content, bytes):
-            text = text_or_content.decode("utf-8", errors="ignore")
-        else:
-            text = text_or_content
-
-        fields = {}
-
-        # Look for key:value patterns (case insensitive)
-        lines = text.split("\n")
-        for line in lines:
-            line = line.strip()
-            if ":" in line:
-                key, value = line.split(":", 1)
-                key = key.strip().lower().replace(" ", "_")
-                value = value.strip()
-
-                if key and value and len(value) > 0:
-                    fields[key] = ExtractedField(
-                        value=value, confidence=0.7, type_hint="text"
-                    )
-
-        # Fallback to echo extractor if no fields found
-        if not fields:
-            echo_extractor = EchoLlmExtractor()
-            return echo_extractor.extract_fields(text)
-
-        return ExtractedRecord(root=fields)
+Use null for missing fields. Confidence should be 0.0-1.0 based on how certain you are."""
 
 
-# Default LLM extractor instance - use CrewAI if available
-try:
-    default_llm_extractor = CrewAIExtractor()
-except Exception:
-    # Fallback to simple extractor if CrewAI setup fails
-    default_llm_extractor = SimpleTextParserExtractor()
+def _get_entry_exit_log_prompt() -> str:
+    """Get system prompt for entry/exit log extraction."""
+    return """You are an expert at extracting structured data from entry/exit logs.
+Extract the following fields and return as JSON:
+
+{
+  "person_name": {"value": "...", "confidence": 0.9},
+  "person_id": {"value": "...", "confidence": 0.8},
+  "entry_time": {"value": "YYYY-MM-DD HH:MM:SS", "confidence": 0.9},
+  "exit_time": {"value": "YYYY-MM-DD HH:MM:SS", "confidence": 0.9},
+  "location": {"value": "...", "confidence": 0.9},
+  "purpose": {"value": "...", "confidence": 0.7},
+  "authorized_by": {"value": "...", "confidence": 0.8},
+  "badge_number": {"value": "...", "confidence": 0.8},
+  "vehicle_info": {"value": "...", "confidence": 0.7}
+}
+
+Use null for missing fields. Confidence should be 0.0-1.0 based on how certain you are."""
 
 
-def extract_fields(text_or_content: Union[str, bytes]) -> ExtractedRecord:
-    """Convenience function to extract fields from text or content."""
-    return default_llm_extractor.extract_fields(text_or_content)
+def _get_generic_prompt() -> str:
+    """Get system prompt for generic document extraction."""
+    return """You are an expert at extracting structured data from documents.
+Analyze the document and extract relevant key-value pairs as JSON:
+
+{
+  "field_name": {"value": "...", "confidence": 0.8},
+  "another_field": {"value": "...", "confidence": 0.9}
+}
+
+Extract fields that seem relevant based on the document content.
+Use descriptive field names. Confidence should be 0.0-1.0 based on how certain you are."""

@@ -1,12 +1,19 @@
 """AI debugging API routes."""
 
-from typing import List
 from fastapi import APIRouter, HTTPException, status
 
+from ..schemas import (
+    DebugRequest,
+    DebugResponse,
+    DebugRunRequest,
+    DebugRunResponse,
+)
 from ..services.debug_service import debug_service
-from ..schemas import DebugRequest, DebugResponse
+from ..services.crewai_service import crewai_service
+from ..db import get_session_sync
+from ..models import Document
 
-router = APIRouter(prefix="/api/debug", tags=["debug"])
+router = APIRouter(prefix="/debug", tags=["debug"])
 
 
 @router.post("/extraction/{document_id}", response_model=DebugResponse)
@@ -18,7 +25,7 @@ async def debug_extraction(document_id: int, request: DebugRequest):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to debug extraction: {str(e)}"
+            detail=f"Failed to debug extraction: {str(e)}",
         )
 
 
@@ -31,7 +38,7 @@ async def debug_reconciliation(document_id: int, request: DebugRequest):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to debug reconciliation: {str(e)}"
+            detail=f"Failed to debug reconciliation: {str(e)}",
         )
 
 
@@ -44,7 +51,7 @@ async def debug_hil_feedback(document_id: int, request: DebugRequest):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to debug HIL feedback: {str(e)}"
+            detail=f"Failed to debug HIL feedback: {str(e)}",
         )
 
 
@@ -57,11 +64,11 @@ async def debug_pipeline_performance(document_id: int, request: DebugRequest):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to debug performance: {str(e)}"
+            detail=f"Failed to debug performance: {str(e)}",
         )
 
 
-@router.get("/history/{document_id}", response_model=List[DebugResponse])
+@router.get("/history/{document_id}", response_model=list[DebugResponse])
 async def get_debug_history(document_id: int):
     """Get debug analysis history for a document."""
     try:
@@ -69,5 +76,52 @@ async def get_debug_history(document_id: int):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get debug history: {str(e)}"
+            detail=f"Failed to get debug history: {str(e)}",
+        )
+
+
+@router.post("/dry-run/{document_id}", response_model=DebugRunResponse)
+async def dry_run_extraction(document_id: int, request: DebugRunRequest):
+    """Run a dry extraction using CrewAI without changing DB state.
+
+    - Optionally override document type
+    - Optionally provide sample text instead of stored content
+    """
+    try:
+        with get_session_sync() as session:
+            document = session.get(Document, document_id)
+            if not document:
+                raise HTTPException(status_code=404, detail="Document not found")
+
+            doc_type = request.document_type_override or (
+                document.document_type.value
+                if hasattr(document.document_type, "value")
+                else str(document.document_type)
+            )
+
+            content = request.sample_text or (document.content or "")
+            result = crewai_service.extract_document_data(content, doc_type)
+
+            if result is None:
+                return DebugRunResponse(
+                    used_document_type=doc_type,
+                    fields={},
+                    prompt_chars=None,
+                    content_chars=len(content) if content else 0,
+                    notes="CrewAI disabled or unavailable",
+                )
+
+            return DebugRunResponse(
+                used_document_type=doc_type,
+                fields=result.root,
+                prompt_chars=None,
+                content_chars=len(content) if content else 0,
+                notes="Dry-run completed",
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Dry-run failed: {str(e)}",
         )
