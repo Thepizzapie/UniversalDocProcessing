@@ -10,10 +10,10 @@ from ..config import settings
 
 
 def extract_fields(text: str, doc_type: str, model: str | None = None) -> dict[str, Any]:
-    """Extract fields using OpenAI API.
+    """Extract fields using OpenAI API with vision support.
 
     Args:
-        text: Document text to extract from
+        text: Document text to extract from (or base64 image data)
         doc_type: Type of document (invoice, receipt, etc.)
         model: OpenAI model to use (defaults to settings.llm_model)
 
@@ -23,6 +23,21 @@ def extract_fields(text: str, doc_type: str, model: str | None = None) -> dict[s
     if not settings.openai_api_key:
         logger.warning("OpenAI API key not configured, returning empty extraction")
         return {}
+
+    # Check if the text is base64 encoded image data
+    is_image = False
+    image_data = None
+    if text.startswith('/9j/') or text.startswith('iVBORw0KGgo') or text.startswith('UklGR'):
+        logger.info("Detected base64 image data, will use GPT-4 Vision for extraction")
+        is_image = True
+        image_data = text
+        model = "gpt-4o"  # Force GPT-4o for vision processing
+    else:
+        # Truncate text if too long to avoid token limits
+        max_chars = 8000  # Roughly 2000 tokens, leaving room for prompt
+        if len(text) > max_chars:
+            logger.warning(f"Text too long ({len(text)} chars), truncating to {max_chars} chars")
+            text = text[:max_chars] + "\n\n[TRUNCATED...]"
 
     model = model or settings.llm_model
 
@@ -40,26 +55,75 @@ def extract_fields(text: str, doc_type: str, model: str | None = None) -> dict[s
     system_prompt = prompts.get(doc_type.lower(), prompts["unknown"])
 
     try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Extract fields from this document:\n\n{text}"},
-            ],
-            temperature=settings.llm_temperature,
-            max_tokens=settings.llm_max_tokens,
-        )
+        if is_image:
+            # Determine image format from base64 header
+            image_format = "jpeg"  # default
+            if image_data.startswith('iVBORw0KGgo'):
+                image_format = "png"
+            elif image_data.startswith('UklGR'):
+                image_format = "webp"
+                
+            logger.info(f"Using GPT-4 Vision for {doc_type} extraction with {image_format} image")
+            
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": f"Extract fields from this {doc_type} document image and return ONLY a valid JSON object with no additional text or explanation:"
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/{image_format};base64,{image_data}",
+                                    "detail": "high"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                temperature=settings.llm_temperature,
+                max_tokens=settings.llm_max_tokens,
+            )
+        else:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Extract fields from this document and return ONLY a valid JSON object with no additional text or explanation:\n\n{text}"},
+                ],
+                temperature=settings.llm_temperature,
+                max_tokens=settings.llm_max_tokens,
+            )
 
         # Parse the JSON response
         content = response.choices[0].message.content
-        extracted_data = json.loads(content)
+        logger.info(f"LLM response content: {content[:500]}...")  # Log first 500 chars for debugging
+        
+        # Try to extract JSON from the response (sometimes LLM adds explanatory text)
+        try:
+            extracted_data = json.loads(content)
+        except json.JSONDecodeError:
+            # Try to find JSON within the response
+            import re
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(0)
+                extracted_data = json.loads(json_str)
+            else:
+                logger.error(f"No valid JSON found in LLM response: {content}")
+                return {}
 
         # Ensure each field has value and confidence
         result = {}
         for field, data in extracted_data.items():
             if isinstance(data, dict) and "value" in data:
                 result[field] = {"value": data["value"], "confidence": data.get("confidence", 0.8)}
-        else:
+            else:
                 # Handle simple value format
                 result[field] = {"value": data, "confidence": 0.8}
 
@@ -76,6 +140,9 @@ def extract_fields(text: str, doc_type: str, model: str | None = None) -> dict[s
 def _get_invoice_prompt() -> str:
     """Get system prompt for invoice extraction."""
     return """You are an expert at extracting structured data from invoices.
+
+IMPORTANT: Return ONLY a valid JSON object with no additional text, explanations, or markdown formatting.
+
 Extract the following fields and return as JSON:
 
 {
@@ -92,12 +159,25 @@ Extract the following fields and return as JSON:
   "payment_terms": {"value": "...", "confidence": 0.7}
 }
 
-Use null for missing fields. Confidence should be 0.0-1.0 based on how certain you are."""
+Rules:
+- Use null for missing fields
+- Confidence should be 0.0-1.0 based on certainty
+- Return only the JSON object, nothing else"""
 
 
 def _get_receipt_prompt() -> str:
     """Get system prompt for receipt extraction."""
-    return """You are an expert at extracting structured data from receipts.
+    return """You are an expert at extracting structured data from receipts using computer vision.
+
+IMPORTANT: Return ONLY a valid JSON object with no additional text, explanations, or markdown formatting.
+
+For receipt images, look carefully at all text including:
+- Store name (usually at the top)
+- Date and time (often near the top)
+- Amounts (total usually at bottom-right)
+- Tax information
+- Payment method details
+
 Extract the following fields and return as JSON:
 
 {
@@ -112,7 +192,10 @@ Extract the following fields and return as JSON:
   "receipt_number": {"value": "...", "confidence": 0.8}
 }
 
-Use null for missing fields. Confidence should be 0.0-1.0 based on how certain you are."""
+Rules:
+- Use null for missing or unreadable fields
+- Confidence should be 0.0-1.0 based on how clearly you can read the text
+- Return only the JSON object, nothing else"""
 
 
 def _get_entry_exit_log_prompt() -> str:
@@ -138,6 +221,9 @@ Use null for missing fields. Confidence should be 0.0-1.0 based on how certain y
 def _get_generic_prompt() -> str:
     """Get system prompt for generic document extraction."""
     return """You are an expert at extracting structured data from documents.
+
+IMPORTANT: Return ONLY a valid JSON object with no additional text, explanations, or markdown formatting.
+
 Analyze the document and extract relevant key-value pairs as JSON:
 
 {
@@ -145,5 +231,9 @@ Analyze the document and extract relevant key-value pairs as JSON:
   "another_field": {"value": "...", "confidence": 0.9}
 }
 
-Extract fields that seem relevant based on the document content.
-Use descriptive field names. Confidence should be 0.0-1.0 based on how certain you are."""
+Rules:
+- Extract fields that seem relevant based on the document content
+- Use descriptive field names
+- Confidence should be 0.0-1.0 based on certainty
+- Return only the JSON object, nothing else
+- Do not include any explanatory text before or after the JSON"""

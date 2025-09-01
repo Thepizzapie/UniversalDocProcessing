@@ -71,27 +71,42 @@ async def get_document_report(document_id: int):
     # Format extracted data
     latest_extraction = None
     if hil_data.get("extraction"):
-        latest_extraction = {
-            k: {
-                "value": v["value"],
-                "confidence": v["confidence"],
-                "type_hint": v["type_hint"],
-            }
-            for k, v in hil_data["extraction"].raw_json.items()
-        }
+        latest_extraction = {}
+        for k, v in hil_data["extraction"].raw_json.items():
+            if isinstance(v, dict):
+                latest_extraction[k] = {
+                    "value": v.get("value", v),  # Use the whole value if no "value" key exists
+                    "confidence": v.get("confidence", 1.0),
+                    "type_hint": v.get("type_hint", "string"),
+                }
+            else:
+                # Handle simple values that aren't structured as objects
+                latest_extraction[k] = {
+                    "value": v,
+                    "confidence": 1.0,
+                    "type_hint": "string",
+                }
 
     # Format corrected data
     latest_correction = None
     if hil_data.get("correction"):
-        latest_correction = {
-            k: {
-                "value": v["value"],
-                "confidence": v["confidence"],
-                "type_hint": v["type_hint"],
-                "correction_reason": v.get("correction_reason"),
-            }
-            for k, v in hil_data["correction"].corrected_json.items()
-        }
+        latest_correction = {}
+        for k, v in hil_data["correction"].corrected_json.items():
+            if isinstance(v, dict):
+                latest_correction[k] = {
+                    "value": v.get("value", v),  # Use the whole value if no "value" key exists
+                    "confidence": v.get("confidence", 1.0),
+                    "type_hint": v.get("type_hint", "string"),
+                    "correction_reason": v.get("correction_reason"),
+                }
+            else:
+                # Handle simple values that aren't structured as objects
+                latest_correction[k] = {
+                    "value": v,
+                    "confidence": 1.0,
+                    "type_hint": "string",
+                    "correction_reason": None,
+                }
 
     # Format final decision
     final_decision_response = None

@@ -11,6 +11,8 @@ from ..enums import ActorType, PipelineState, ReconcileStatus, ReconcileStrategy
 from ..models import Document, ReconciliationResult
 from ..schemas import ReconcileDiff
 from .audit import log_audit_event
+from .debug_service import record_reconciliation
+from .crewai_service import crewai_service
 
 
 class ReconcileService:
@@ -74,11 +76,29 @@ class ReconcileService:
                     if isinstance(payload, dict):
                         fetched_data.update(payload)
 
-            # Perform reconciliation using appropriate strategy
+            # Perform reconciliation using CrewAI when available; fallback to local
             logger.info(f"Starting reconciliation with strategy: {strategy}")
-            results, overall_score = ReconcileService._reconcile_data(
-                corrected_data, fetched_data, strategy
-            )
+            if crewai_service.is_enabled:
+                try:
+                    agent_result = crewai_service.reconcile_data(
+                        extracted_data=corrected_data,
+                        external_data=fetched_data,
+                        strategy=strategy,
+                    )
+                    if agent_result:
+                        results, overall_score = agent_result  # expected (list[ReconcileDiff], float) compatible
+                    else:
+                        results, overall_score = ReconcileService._reconcile_data(
+                            corrected_data, fetched_data, strategy
+                        )
+                except Exception:
+                    results, overall_score = ReconcileService._reconcile_data(
+                        corrected_data, fetched_data, strategy
+                    )
+            else:
+                results, overall_score = ReconcileService._reconcile_data(
+                    corrected_data, fetched_data, strategy
+                )
 
             # Create reconciliation result
             reconciliation = ReconciliationResult(
@@ -120,6 +140,8 @@ class ReconcileService:
                 session=session,
             )
 
+            # Record metric using a simple threshold for pass/fail
+            record_reconciliation(overall_score >= 0.8)
             return reconciliation
 
     @staticmethod

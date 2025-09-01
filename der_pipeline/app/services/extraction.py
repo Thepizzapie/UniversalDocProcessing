@@ -4,11 +4,14 @@ import requests
 from loguru import logger
 
 from ..services.crewai_service import crewai_service
+from ..adapters import llm_extractor
 from ..db import get_session_sync
 from ..enums import ActorType, PipelineState
 from ..models import Document, Extraction
+from ..models import CustomDocTypeDefinition
 from ..schemas import ExtractedField, ExtractedRecord
 from .audit import log_audit_event
+from .debug_service import record_extraction
 
 
 class ExtractionService:
@@ -25,38 +28,59 @@ class ExtractionService:
             logger.warning(f"No text content available for document {document.id}")
             return ExtractedRecord(root={})
 
-        # Step 2: Extract fields using CrewAI
+        # Step 2: Get expected fields from custom schema FIRST
         doc_type = (
             document.document_type.value
             if hasattr(document.document_type, "value")
             else str(document.document_type)
         )
 
+        # Get the expected fields based on custom schema
+        expected_fields = ExtractionService._expected_fields_for_doc_type(doc_type, document)
+        logger.info(f"Expected fields for {doc_type}: {expected_fields}")
+
         logger.info(f"Starting CrewAI extraction for document {document.id}, type: {doc_type}")
 
         try:
-            # Use CrewAI for extraction
-            raw_extracted = crewai_service.extract_document_data(text_content, doc_type)
-            if not raw_extracted:
-                logger.warning("CrewAI extraction returned empty results, using fallback")
-                fields = {"sample_field": ExtractedField(value="extracted_value", confidence=0.5, type_hint="text")}
-                raw_extracted = ExtractedRecord(root=fields)
+            from tenacity import retry, stop_after_attempt, wait_exponential
 
-            # Conform output to the document-type instructions
-            expected_fields = ExtractionService._expected_fields_for_doc_type(doc_type)
+            @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=8))
+            def _run_extraction() -> ExtractedRecord:
+                # Prefer CrewAI when enabled - pass expected fields to guide extraction
+                result = crewai_service.extract_document_data(text_content, doc_type, expected_fields)
+                if result:
+                    return result
+                # Fallback to direct LLM extractor
+                logger.info("Falling back to direct LLM extractor")
+                data = llm_extractor.extract_fields(text_content, doc_type)
+                fields = {
+                    k: ExtractedField(value=v.get("value"), confidence=v.get("confidence", 0.8), type_hint=None)
+                    for k, v in data.items()
+                }
+                return ExtractedRecord(root=fields)
+
+            raw_extracted = _run_extraction()
+
+            # Conform output to the document-type instructions - but prioritize what was actually extracted
             conformed_fields: dict[str, ExtractedField] = {}
 
+            # First, include all successfully extracted fields
+            for field_name, field_value in raw_extracted.root.items():
+                if isinstance(field_value, ExtractedField) and field_value.value is not None:
+                    conformed_fields[field_name] = field_value
+
+            # Then, ensure all expected fields are present (with null values if not extracted)
             for field_name in expected_fields:
-                src = raw_extracted.root.get(field_name)
-                if isinstance(src, ExtractedField):
-                    conformed_fields[field_name] = src
-                else:
+                if field_name not in conformed_fields:
                     conformed_fields[field_name] = ExtractedField(value=None, confidence=0.0, type_hint="text")
 
+            record_extraction(True)
+            logger.info(f"Final conformed fields: {list(conformed_fields.keys())}")
             return ExtractedRecord(root=conformed_fields)
         except Exception as e:
             logger.error(f"CrewAI extraction failed: {e}")
             fields = {"error": ExtractedField(value=f"Extraction failed: {str(e)}", confidence=0.1, type_hint="error")}
+            record_extraction(False)
             return ExtractedRecord(root=fields)
 
 
@@ -217,8 +241,49 @@ Status: Active
         return extraction
 
     @staticmethod
-    def _expected_fields_for_doc_type(document_type: str) -> list[str]:
-        """Return required+optional field names for a given document type."""
+    def _expected_fields_for_doc_type(document_type: str, document: Document | None = None) -> list[str]:
+        """Return required+optional field names for a given document type.
+
+        Looks up tenant-specific CustomDocTypeDefinition if available.
+        """
+
+        # Try custom definition first - use fuzzy matching
+        from ..db import get_session_sync
+
+        with get_session_sync() as session:
+            if document and document.tenant_id:
+                # Get all custom document types for this tenant
+                custom_defs = session.query(CustomDocTypeDefinition).filter(
+                    CustomDocTypeDefinition.tenant_id == document.tenant_id
+                ).all()
+                
+                # Find matching custom document type using fuzzy matching
+                matching_def = None
+                doc_type_lower = document_type.lower()
+                
+                for custom_def in custom_defs:
+                    name_lower = custom_def.name.lower()
+                    # Check for exact match first
+                    if name_lower == doc_type_lower:
+                        matching_def = custom_def
+                        break
+                    # Check for partial matches (e.g., "Purchase Receipt" matches "RECEIPT")
+                    elif (doc_type_lower in name_lower or 
+                          'receipt' in name_lower and 'receipt' in doc_type_lower or
+                          'invoice' in name_lower and 'invoice' in doc_type_lower or
+                          'purchase' in name_lower and 'receipt' in doc_type_lower):
+                        matching_def = custom_def
+                        break
+                
+                if matching_def:
+                    schema = matching_def.output_schema or {}
+                    logger.info(f"Found custom schema '{matching_def.name}' for document type '{document_type}': {list(schema.keys())}")
+                    return list(schema.keys())
+                else:
+                    logger.info(f"No custom schema found for document type '{document_type}', available custom types: {[cd.name for cd in custom_defs]}")
+            else:
+                logger.info(f"No tenant_id available for document, cannot lookup custom schemas")
+
         doc_type = (document_type or "UNKNOWN").upper()
         if doc_type == "INVOICE":
             return [
@@ -286,6 +351,27 @@ Status: Active
             # Extract data
             extracted_data = ExtractionService.extract(document)
 
+            # Check if document type was detected in extraction and update if needed
+            if document.document_type.value == "UNKNOWN" and "document_type" in extracted_data.root:
+                detected_type = extracted_data.root["document_type"].value
+                if detected_type and isinstance(detected_type, str):
+                    detected_type_upper = detected_type.upper()
+                    # Map common variations to our enum values
+                    type_mapping = {
+                        "RECEIPT": "RECEIPT",
+                        "INVOICE": "INVOICE", 
+                        "ENTRY_EXIT_LOG": "ENTRY_EXIT_LOG",
+                        "ENTRY EXIT LOG": "ENTRY_EXIT_LOG",
+                        "LOG": "ENTRY_EXIT_LOG"
+                    }
+                    
+                    if detected_type_upper in type_mapping:
+                        from ..enums import DocumentType
+                        new_doc_type = getattr(DocumentType, type_mapping[detected_type_upper], None)
+                        if new_doc_type:
+                            logger.info(f"Updating document {document_id} type from UNKNOWN to {new_doc_type}")
+                            document.document_type = new_doc_type
+
             # Create extraction record
             extraction = ExtractionService.create_extraction_record(
                 document_id, extracted_data.root
@@ -306,6 +392,7 @@ Status: Active
                 payload={
                     "extraction_id": extraction.id,
                     "fields_extracted": len(extracted_data.root),
+                    "document_type_updated": document.document_type.value,
                 },
             )
 

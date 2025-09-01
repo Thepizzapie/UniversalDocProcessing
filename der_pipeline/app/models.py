@@ -21,6 +21,7 @@ class Document(SQLModel, table=True):
     source_uri: str | None = None
     checksum: str | None = None
     content: str | None = None  # Add content field for storing document content/base64
+    tenant_id: int | None = Field(default=None, foreign_key="tenant.id")
 
     # Relationships
     extractions: list["Extraction"] = Relationship(back_populates="document")
@@ -71,6 +72,7 @@ class FetchJob(SQLModel, table=True):
     started_at: datetime | None = None
     finished_at: datetime | None = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    tenant_id: int | None = Field(default=None, foreign_key="tenant.id")
 
     # Relationships
     document: Document | None = Relationship(back_populates="fetch_jobs")
@@ -160,6 +162,39 @@ class DebugSession(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+# ---------------------------------------------------------------------------
+# New multi-tenant & self-service configuration entities
+# ---------------------------------------------------------------------------
+
+
+class Tenant(SQLModel, table=True):
+    """Represents a business customer (tenant) that owns documents and config."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    name: str
+    slug: str = Field(index=True, unique=True)
+    api_key: str | None = None  # optional per-tenant auth key
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class CustomDocTypeDefinition(SQLModel, table=True):
+    """Tenant-specific document type with extraction instructions & output schema."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    tenant_id: int = Field(foreign_key="tenant.id")
+    name: str  # e.g. "Handwritten Expense Form"
+    description: str | None = None
+    instructions: dict[str, Any] = Field(sa_column=Column(JSON))  # prompt / OCR hints
+    output_schema: dict[str, Any] = Field(sa_column=Column(JSON))  # desired JSON schema
+    destination_webhook: str | None = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Relationships
+    tenant: Tenant | None = Relationship()
+
+
 # Import User model from auth to ensure it's registered
 from .auth import User  # noqa: E402
 
@@ -174,5 +209,7 @@ __all__ = [
     "RagDocument",
     "DocumentTypeTemplate",
     "DebugSession",
+    "Tenant",
+    "CustomDocTypeDefinition",
     "User",
 ]

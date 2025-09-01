@@ -35,9 +35,9 @@ class Settings(BaseSettings):
     pct_tolerance: float = 0.005  # 0.5%
     date_tolerance_days: int = 1
 
-    # OCR settings
-    ocr_enabled: bool = True
-    ocr_language: str = "eng"
+    # OCR disabled: using LLM-only extraction
+    ocr_enabled: bool = False
+    ocr_language: str = "eng"  # kept for backward compat; not used
 
     # LLM/AI settings
     llm_provider: str = "openai"  # echo, openai, anthropic

@@ -1,6 +1,7 @@
 """Database connection and setup."""
 
 from sqlalchemy.engine import Engine
+from sqlalchemy import inspect, text
 from sqlmodel import Session, create_engine
 
 from .config import settings
@@ -35,6 +36,27 @@ def create_tables():
 
     engine = get_engine()
     SQLModel.metadata.create_all(engine)
+    _post_create_migrations(engine)
+
+
+def _column_exists(engine: Engine, table: str, column: str) -> bool:
+    inspector = inspect(engine)
+    try:
+        cols = inspector.get_columns(table)
+        return any(c["name"] == column for c in cols)
+    except Exception:
+        return False
+
+
+def _post_create_migrations(engine: Engine) -> None:
+    """Lightweight, dev-safe schema adjustments for existing DBs."""
+    with engine.begin() as conn:
+        # Add tenant_id to document if missing
+        if _column_exists(engine, "document", "id") and not _column_exists(engine, "document", "tenant_id"):
+            conn.execute(text("ALTER TABLE document ADD COLUMN tenant_id INTEGER"))
+        # Add tenant_id to fetchjob if missing
+        if _column_exists(engine, "fetchjob", "id") and not _column_exists(engine, "fetchjob", "tenant_id"):
+            conn.execute(text("ALTER TABLE fetchjob ADD COLUMN tenant_id INTEGER"))
 
 
 def get_session_sync():

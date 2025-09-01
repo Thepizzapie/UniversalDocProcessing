@@ -175,24 +175,24 @@ const DebugPanel = ({ documentId, currentStage, documentData }) => {
       >
         <div className="flex items-center">
           <Bug className="h-5 w-5 text-purple-500 mr-2" />
-          <h3 className="text-lg font-medium text-gray-900">AI Debugging Tools</h3>
-          <span className="ml-2 px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full">
+          <h3 className="text-lg font-medium text-primary">AI Debugging Tools</h3>
+          <span className="ml-2 px-2 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-200 text-xs rounded-full">
             Beta
           </span>
         </div>
         {expanded ? (
-          <ChevronDown className="h-5 w-5 text-gray-400" />
+          <ChevronDown className="h-5 w-5 text-muted" />
         ) : (
-          <ChevronRight className="h-5 w-5 text-gray-400" />
+          <ChevronRight className="h-5 w-5 text-muted" />
         )}
       </div>
 
       {expanded && (
         <div className="mt-6 space-y-6">
           {/* Dry-Run Extraction */}
-          <div className="p-4 border border-purple-200 rounded-lg bg-purple-50">
+          <div className="p-4 border border-purple-200 dark:border-purple-800 rounded-lg bg-purple-50 dark:bg-purple-900">
             <div className="flex items-center justify-between">
-              <div className="font-medium text-purple-900">Dry-run extraction (no DB writes)</div>
+              <div className="font-medium text-purple-900 dark:text-purple-100">Dry-run extraction (no DB writes)</div>
               <div className="flex items-center space-x-2">
                 <select
                   className="input text-sm"
@@ -211,11 +211,11 @@ const DebugPanel = ({ documentId, currentStage, documentData }) => {
               </div>
             </div>
             {dryRunResult && (
-              <div className="mt-3 bg-white p-3 rounded border text-sm">
-                <div className="mb-2 text-gray-700">
+              <div className="mt-3 bg-white dark:bg-primary-800 p-3 rounded border border-primary-200 dark:border-primary-700 text-sm">
+                <div className="mb-2 text-primary">
                   Used type: <span className="font-medium">{dryRunResult.used_document_type}</span>
                 </div>
-                <pre className="whitespace-pre-wrap text-gray-700">{JSON.stringify(dryRunResult.fields, null, 2)}</pre>
+                <pre className="whitespace-pre-wrap text-secondary">{JSON.stringify(dryRunResult.fields, null, 2)}</pre>
               </div>
             )}
           </div>
@@ -224,7 +224,7 @@ const DebugPanel = ({ documentId, currentStage, documentData }) => {
             <button
               onClick={() => runDebugAnalysis('extraction', 'quality_check')}
               disabled={loading}
-              className="p-3 border border-gray-200 rounded-lg hover:bg-gray-50 text-left"
+              className="p-3 border border-primary-200 dark:border-primary-700 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-700 text-left"
             >
               <div className="flex items-center">
                 <Brain className="h-4 w-4 text-blue-500 mr-2" />
@@ -238,7 +238,7 @@ const DebugPanel = ({ documentId, currentStage, documentData }) => {
             <button
               onClick={() => runDebugAnalysis('reconciliation', 'mismatch_analysis')}
               disabled={loading || !documentData?.latest_reconciliation}
-              className="p-3 border border-gray-200 rounded-lg hover:bg-gray-50 text-left disabled:opacity-50"
+              className="p-3 border border-primary-200 dark:border-primary-700 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-700 text-left disabled:opacity-50"
             >
               <div className="flex items-center">
                 <AlertTriangle className="h-4 w-4 text-orange-500 mr-2" />
@@ -252,7 +252,7 @@ const DebugPanel = ({ documentId, currentStage, documentData }) => {
             <button
               onClick={() => runDebugAnalysis('hil', 'feedback_analysis')}
               disabled={loading || !documentData?.latest_correction}
-              className="p-3 border border-gray-200 rounded-lg hover:bg-gray-50 text-left disabled:opacity-50"
+              className="p-3 border border-primary-200 dark:border-primary-700 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-700 text-left disabled:opacity-50"
             >
               <div className="flex items-center">
                 <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
@@ -266,7 +266,7 @@ const DebugPanel = ({ documentId, currentStage, documentData }) => {
             <button
               onClick={() => runDebugAnalysis('performance', 'bottleneck_analysis')}
               disabled={loading}
-              className="p-3 border border-gray-200 rounded-lg hover:bg-gray-50 text-left"
+              className="p-3 border border-primary-200 dark:border-primary-700 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-700 text-left"
             >
               <div className="flex items-center">
                 <Clock className="h-4 w-4 text-purple-500 mr-2" />
@@ -282,16 +282,16 @@ const DebugPanel = ({ documentId, currentStage, documentData }) => {
           {loading && (
             <div className="flex items-center justify-center p-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-              <span className="ml-3 text-gray-600">Running AI analysis...</span>
+              <span className="ml-3 text-secondary">Running AI analysis...</span>
             </div>
           )}
 
           {/* Active Analysis Results */}
           {activeAnalysis && !loading && (
-            <div className="bg-purple-50 border border-purple-200 rounded-lg p-6">
+            <div className="bg-purple-50 dark:bg-purple-900 border border-purple-200 dark:border-purple-800 rounded-lg p-6">
               <div className="flex items-center mb-4">
                 <Brain className="h-5 w-5 text-purple-600 mr-2" />
-                <h4 className="font-medium text-purple-900">
+                <h4 className="font-medium text-purple-900 dark:text-purple-100">
                   {activeAnalysis.debug_type.replace('_', ' ').toUpperCase()} Analysis
                 </h4>
                 {activeAnalysis.confidence_score && (
@@ -304,14 +304,14 @@ const DebugPanel = ({ documentId, currentStage, documentData }) => {
               {/* AI Analysis Summary */}
               {activeAnalysis.ai_analysis && (
                 <div className="mb-4">
-                  <h5 className="font-medium text-gray-900 mb-2">AI Analysis:</h5>
-                  <div className="bg-white p-3 rounded border text-sm">
+                  <h5 className="font-medium text-primary mb-2">AI Analysis:</h5>
+                  <div className="bg-white dark:bg-primary-800 p-3 rounded border border-primary-200 dark:border-primary-700 text-sm">
                     {typeof activeAnalysis.ai_analysis === 'object' ? (
-                      <pre className="whitespace-pre-wrap text-gray-700">
+                      <pre className="whitespace-pre-wrap text-secondary">
                         {JSON.stringify(activeAnalysis.ai_analysis, null, 2)}
                       </pre>
                     ) : (
-                      <p className="text-gray-700">{activeAnalysis.ai_analysis}</p>
+                      <p className="text-primary">{activeAnalysis.ai_analysis}</p>
                     )}
                   </div>
                 </div>
@@ -320,12 +320,12 @@ const DebugPanel = ({ documentId, currentStage, documentData }) => {
               {/* Recommendations */}
               {activeAnalysis.recommendations && activeAnalysis.recommendations.length > 0 && (
                 <div>
-                  <h5 className="font-medium text-gray-900 mb-2">Recommendations:</h5>
+                  <h5 className="font-medium text-primary mb-2">Recommendations:</h5>
                   <ul className="space-y-1">
                     {activeAnalysis.recommendations.map((rec, index) => (
                       <li key={index} className="flex items-start">
                         <CheckCircle className="h-4 w-4 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
-                        <span className="text-sm text-gray-700">{rec}</span>
+                        <span className="text-sm text-primary">{rec}</span>
                       </li>
                     ))}
                   </ul>
@@ -337,26 +337,26 @@ const DebugPanel = ({ documentId, currentStage, documentData }) => {
           {/* Debug History */}
           {debugHistory.length > 0 && (
             <div>
-              <h4 className="font-medium text-gray-900 mb-3">Recent Debug Sessions</h4>
+              <h4 className="font-medium text-primary mb-3">Recent Debug Sessions</h4>
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {debugHistory.slice(0, 5).map((session, index) => {
                   const ConfidenceIcon = getConfidenceIcon(session.confidence_score);
                   return (
-                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div key={index} className="flex items-center justify-between p-3 bg-primary-50 dark:bg-primary-700 rounded-lg">
                       <div className="flex items-center">
                         <ConfidenceIcon className={`h-4 w-4 mr-2 ${getConfidenceColor(session.confidence_score)}`} />
                         <div>
-                          <div className="font-medium text-sm text-gray-900">
+                          <div className="font-medium text-sm text-primary">
                             {session.stage} - {session.debug_type.replace('_', ' ')}
                           </div>
-                          <div className="text-xs text-gray-500">
+                          <div className="text-xs text-muted">
                             {session.recommendations?.length || 0} recommendations
                           </div>
                         </div>
                       </div>
                       <button
                         onClick={() => setActiveAnalysis(session)}
-                        className="text-sm text-purple-600 hover:text-purple-700"
+                        className="text-sm text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300"
                       >
                         View
                       </button>

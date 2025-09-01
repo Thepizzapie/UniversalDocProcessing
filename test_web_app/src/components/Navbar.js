@@ -7,10 +7,12 @@ import {
   Home,
   Database,
   BookOpen,
-  Settings
+  Settings,
+  Moon,
+  Sun
 } from 'lucide-react';
 
-const Navbar = () => {
+const Navbar = ({ darkMode, toggleDarkMode }) => {
   const location = useLocation();
   
   const navigation = [
@@ -18,41 +20,57 @@ const Navbar = () => {
     { name: 'Process Documents', href: '/upload', icon: Upload },
     { name: 'RAG Knowledge', href: '/rag-upload', icon: Database },
     { name: 'Browse References', href: '/rag-manager', icon: BookOpen },
+    { name: 'Doc Types', href: '/doc-types', icon: FileText },
     { name: 'Settings', href: '/settings', icon: Settings },
     { name: 'System Health', href: '/health', icon: Activity },
   ];
 
   return (
-    <nav className="bg-white shadow-lg border-b border-gray-200">
+    <nav className="bg-white dark:bg-primary-800 shadow-lg border-b border-primary-200 dark:border-primary-700 transition-colors">
       <div className="container mx-auto px-4">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <Link to="/" className="flex items-center space-x-2">
-            <FileText className="h-8 w-8 text-blue-600" />
-            <span className="text-xl font-bold text-gray-900">
-              DER Pipeline Test
+            <FileText className="h-8 w-8 text-primary" />
+            <span className="text-xl font-bold text-primary">
+              DER.ai
             </span>
           </Link>
 
           {/* Navigation Links */}
-          <div className="hidden md:flex space-x-8">
-            {navigation.map((item) => {
-              const isActive = location.pathname === item.href;
-              return (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    isActive
-                      ? 'bg-blue-100 text-blue-700'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                  }`}
-                >
-                  <item.icon className="h-4 w-4" />
-                  <span>{item.name}</span>
-                </Link>
-              );
-            })}
+          <div className="hidden md:flex items-center space-x-6">
+            <div className="flex space-x-6">
+              {navigation.map((item) => {
+                const isActive = location.pathname === item.href;
+                return (
+                  <Link
+                    key={item.name}
+                    to={item.href}
+                    className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-primary-100 dark:bg-primary-700 text-primary'
+                        : 'text-secondary hover:text-primary hover:bg-primary-50 dark:hover:bg-primary-700'
+                    }`}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    <span>{item.name}</span>
+                  </Link>
+                );
+              })}
+            </div>
+            
+            {/* Dark Mode Toggle */}
+            <button
+              onClick={toggleDarkMode}
+              className="p-2 rounded-lg text-secondary hover:bg-primary-100 dark:hover:bg-primary-700 transition-colors"
+              aria-label="Toggle dark mode"
+            >
+              {darkMode ? (
+                <Sun className="h-5 w-5" />
+              ) : (
+                <Moon className="h-5 w-5" />
+              )}
+            </button>
           </div>
         </div>
       </div>

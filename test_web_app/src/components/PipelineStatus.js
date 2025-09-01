@@ -83,25 +83,25 @@ const PipelineStatus = ({ currentState, document }) => {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'completed': return 'bg-green-500 text-white';
-      case 'current': return 'bg-primary-500 text-white';
-      case 'error': return 'bg-red-500 text-white';
-      default: return 'bg-gray-300 text-gray-500';
+      case 'completed': return 'bg-green-500 dark:bg-green-400 text-white';
+      case 'current': return 'bg-accent-500 dark:bg-accent-400 text-white';
+      case 'error': return 'bg-red-500 dark:bg-red-400 text-white';
+      default: return 'bg-primary-300 dark:bg-primary-600 text-primary-500 dark:text-primary-300';
     }
   };
 
   const getStepColor = (status) => {
     switch (status) {
-      case 'completed': return 'border-green-200 bg-green-50';
-      case 'current': return 'border-primary-200 bg-primary-50';
-      case 'error': return 'border-red-200 bg-red-50';
-      default: return 'border-gray-200 bg-gray-50';
+      case 'completed': return 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900';
+      case 'current': return 'border-accent-200 dark:border-accent-800 bg-accent-50 dark:bg-accent-900';
+      case 'error': return 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900';
+      default: return 'border-primary-200 dark:border-primary-700 bg-primary-50 dark:bg-primary-800';
     }
   };
 
   return (
     <div className="card">
-      <h3 className="text-lg font-semibold text-gray-900 mb-6">Pipeline Status</h3>
+      <h3 className="text-lg font-semibold text-primary mb-6">Pipeline Status</h3>
       
       <div className="space-y-4">
         {steps.map((step, index) => {
@@ -118,8 +118,8 @@ const PipelineStatus = ({ currentState, document }) => {
               </div>
               
               <div className="ml-4 flex-1">
-                <h4 className="text-sm font-medium text-gray-900">{step.name}</h4>
-                <p className="text-sm text-gray-600">{step.description}</p>
+                <h4 className="text-sm font-medium text-primary">{step.name}</h4>
+                <p className="text-sm text-secondary">{step.description}</p>
               </div>
               
               <div className="flex-shrink-0">
@@ -127,7 +127,7 @@ const PipelineStatus = ({ currentState, document }) => {
                   <CheckCircle className="h-6 w-6 text-green-500" />
                 )}
                 {status === 'current' && (
-                  <Clock className="h-6 w-6 text-primary-500" />
+                  <Clock className="h-6 w-6 text-accent-500" />
                 )}
                 {status === 'error' && (
                   <XCircle className="h-6 w-6 text-red-500" />

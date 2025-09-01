@@ -12,12 +12,37 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
+from sqlmodel import Session, select
 
 from .config import settings
-from .db import create_tables
+from .db import create_tables, get_session
+from .models import Tenant
 
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address)
+
+
+def _create_default_tenant():
+    """Create a default tenant for development if it doesn't exist."""
+    try:
+        with next(get_session()) as session:
+            # Check if default tenant already exists
+            existing = session.exec(select(Tenant).where(Tenant.id == 1)).first()
+            if not existing:
+                # Create default tenant
+                default_tenant = Tenant(
+                    id=1,
+                    name="Default Organization",
+                    slug="default",
+                    api_key=None
+                )
+                session.add(default_tenant)
+                session.commit()
+                logger.info("Created default tenant (ID: 1) for development")
+            else:
+                logger.info("Default tenant already exists")
+    except Exception as e:
+        logger.warning(f"Failed to create default tenant: {e}")
 
 
 # Lifespan context manager
@@ -28,6 +53,9 @@ async def lifespan(app: FastAPI):
     logger.info("Starting UniversalDocProcessing API")
     create_tables()
     logger.info("Database tables created/verified")
+    
+    # Create default tenant for development
+    _create_default_tenant()
 
     yield
 
@@ -103,7 +131,8 @@ def create_app() -> FastAPI:
         return response
 
     # Add Prometheus metrics
-    Instrumentator().instrument(app).expose(app, endpoint="/metrics")
+    instrumentator = Instrumentator()
+    instrumentator.instrument(app).expose(app, endpoint="/metrics")
 
     # Import and include routers
     from .routers import (
@@ -119,6 +148,8 @@ def create_app() -> FastAPI:
         rag,
         reconcile,
         reports,
+        tenants,
+        custom_doc_types,
     )
 
     app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
@@ -133,6 +164,8 @@ def create_app() -> FastAPI:
     app.include_router(debug.router, prefix="/api", tags=["debug"])
     app.include_router(document_types.router, prefix="/api", tags=["document-types"])
     app.include_router(config.router, prefix="/api", tags=["config"])
+    app.include_router(tenants.router, prefix="/api", tags=["tenants"])
+    app.include_router(custom_doc_types.router, prefix="/api", tags=["custom-doc-types"])
 
     # Add health endpoint to API prefix
     @app.get("/api/health")

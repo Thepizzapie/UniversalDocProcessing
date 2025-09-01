@@ -1,58 +1,99 @@
 # UniversalDocProcessing
 
-AI-powered document processing system with type-specific extraction, authentication, and reconciliation capabilities.
+AI-powered document processing system with intelligent extraction, custom document types, human-in-the-loop validation, and automated reconciliation capabilities.
 
-## Features
+## 🚀 Current Status
 
-- **Document Processing**: Extract structured data from invoices, receipts, entry/exit logs, and unknown document types
-- **Authentication**: JWT-based user management with role-based access control
-- **AI Integration**: CrewAI agents with OpenAI GPT models for intelligent extraction
-- **Pipeline Workflow**: 5-stage processing (ingest → HIL → fetch → reconcile → finalize)
-- **Dynamic Configuration**: Runtime settings reload without server restart
-- **Audit Trail**: Complete processing history with correlation IDs
-- **RAG System**: Knowledge base with Qdrant/FAISS fallback
+**Phase 1 - Core Infrastructure**: ✅ Complete
+- FastAPI backend with SQLModel/Alembic
+- JWT authentication with role-based access control  
+- 5-stage pipeline architecture (ingest → HIL → fetch → reconcile → finalize)
+- React frontend with modern UI/UX
 
-## Architecture
+**Phase 2 - Document Processing**: 🚧 In Progress  
+- ✅ Custom document type creator with visual schema builder
+- ✅ GPT-4 Vision integration for direct image processing (no OCR)
+- ✅ Human-in-the-Loop (HIL) correction interface
+- 🚧 Advanced extraction processing with CrewAI agents
+- 🚧 HIL validation and approval workflow
+
+**Phase 3 - Intelligence & Automation**: 📋 Next
+- RAG system for reference data matching
+- Automated reconciliation with external systems
+- AI-powered debugging and recommendations
+
+## ✨ Key Features
+
+- **🎯 Custom Document Types**: Visual schema builder for any document format
+- **🤖 GPT-4 Vision Processing**: Direct image-to-data extraction without OCR
+- **👥 Human-in-the-Loop**: Interactive correction and validation interface  
+- **🔄 5-Stage Pipeline**: Comprehensive processing workflow with audit trails
+- **🏢 Multi-Tenant**: Isolated processing per organization
+- **🛡️ Enterprise Security**: JWT authentication, rate limiting, CORS protection
+- **📊 Real-time Monitoring**: Pipeline status tracking and system health
+
+## 🏗️ Architecture
 
 ### Backend (FastAPI)
-- SQLModel with SQLite/PostgreSQL support
-- Alembic database migrations
-- Rate limiting and CORS
-- Comprehensive audit logging
-- Multi-connector fetch system
+- **Database**: SQLModel with SQLite/PostgreSQL + Alembic migrations
+- **Authentication**: JWT with role-based access control (user/reviewer/admin)
+- **AI Integration**: GPT-4 Vision for direct image processing [[memory:7768133]]
+- **Pipeline**: 5-stage processing with state management
+- **Security**: Rate limiting, CORS, input validation
+- **Monitoring**: Comprehensive audit logging with correlation IDs
 
 ### Frontend (React)
-- Document upload with type selection
-- Human-in-the-loop correction interface
-- Pipeline status monitoring
-- Settings management
+- **Document Upload**: File and URL ingestion with type selection
+- **Custom Types**: Visual schema builder with AI assistance
+- **HIL Interface**: Interactive correction and validation workflows
+- **Monitoring**: Real-time pipeline status and system health
+- **Settings**: Dynamic configuration management
 
-## Quick Start
+### Key Components
+- **Custom Document Types**: Tenant-specific schema definitions
+- **Extraction Engine**: GPT-4 Vision with confidence scoring
+- **HIL System**: Human validation with approval workflows
+- **Audit System**: Complete processing history and correlation tracking
+
+## 🚀 Quick Start
 
 ### Prerequisites
 - Python 3.11+
 - Node.js 16+
-- OpenAI API key
+- OpenAI API key (GPT-4 Vision access recommended)
 
 ### Setup
 ```bash
-# Backend
+# 1. Backend Setup
 cd der_pipeline
 pip install -r requirements.txt
-cp .env.example .env
-# Edit .env with your OpenAI API key
+
+# 2. Configuration
+# Create .env file or use runtime config via /api/config
+export OPENAI_API_KEY="your-api-key-here"
+export LLM_MODEL="gpt-4o"  # or gpt-4o-mini for cost optimization
+
+# 3. Start Backend
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
 
-# Frontend (separate terminal)
+# 4. Frontend Setup (separate terminal)
 cd test_web_app
 npm install
 npm start
 ```
 
-### Access
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8080
-- API Docs: http://localhost:8080/docs
+### 🌐 Access Points
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:8080
+- **API Documentation**: http://localhost:8080/docs
+- **Health Check**: http://localhost:8080/health
+
+### 🔧 Configuration
+Configure via web UI at `/settings` or environment variables:
+- `OPENAI_API_KEY` - Required for AI processing
+- `LLM_MODEL` - AI model selection (gpt-4o, gpt-4o-mini)
+- `JWT_SECRET` - Authentication secret (change default!)
+- `CREWAI_ENABLED` - Enable advanced AI agents
 
 ## Development
 
@@ -138,6 +179,54 @@ docker-compose up --build
 # - Redis: localhost:6379
 # - Qdrant: http://localhost:6333
 ```
+
+## 🎯 Next Steps & Roadmap
+
+### Immediate Priorities (Current Sprint)
+1. **Complete HIL Workflow** 
+   - Finish validation and approval logic
+   - Add confidence-based auto-approval
+   - Implement reviewer assignment and notifications
+
+2. **RAG System Implementation**
+   - Vector database integration (Qdrant)
+   - Reference document matching
+   - Semantic search for validation data
+
+3. **Reconciliation Engine**
+   - External system connectors (QuickBooks, Xero, SFTP)
+   - Automated matching algorithms
+   - Conflict resolution workflows
+
+### Phase 3 Enhancements
+- **AI Debugging Tools**: Intelligent analysis and recommendations
+- **Performance Optimization**: Caching, async processing, batch operations  
+- **Advanced Analytics**: Processing metrics, accuracy tracking, cost analysis
+- **Enterprise Features**: SSO integration, advanced RBAC, compliance reporting
+
+### Potential Refinements
+- **Model Optimization**: Fine-tuning for specific document types
+- **Multi-language Support**: International document processing
+- **API Integrations**: Webhook notifications, external validation services
+- **Mobile Interface**: Native apps for field document capture
+- **Blockchain Integration**: Immutable audit trails and document verification
+
+## 🔒 Security Notes
+
+⚠️ **Important**: This project handles sensitive document data
+- Change default JWT secret in production
+- Use environment variables for API keys (never commit secrets)
+- Enable HTTPS in production deployments
+- Regularly rotate API keys and credentials
+- Monitor access logs and audit trails
+
+## 📞 Support & Development
+
+For development questions or contributions:
+- Review the `/docs` API documentation
+- Check system health at `/health` endpoint
+- Enable debug mode for detailed logging
+- Use the web UI's debug panel for AI analysis
 
 ## License
 

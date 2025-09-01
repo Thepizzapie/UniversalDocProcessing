@@ -164,3 +164,26 @@ def reconcile_document(self, document_id: int, strategy: str):
             )
 
         raise
+
+
+# ----------------------------
+# Webhook dispatch task
+# ----------------------------
+
+
+@celery_app.task(bind=True, max_retries=5, default_retry_delay=30)
+def dispatch_webhook(self, document_id: int):
+    """Send extracted/reconciled document data to customer webhook."""
+
+    from app.services.webhook_dispatch import WebhookDispatchService
+
+    try:
+        WebhookDispatchService.dispatch_document(document_id)
+        return {"document_id": document_id, "status": "success"}
+    except Exception as exc:
+        logger.error(f"Webhook dispatch failed for document {document_id}: {exc}")
+        try:
+            self.retry(exc=exc)
+        except self.MaxRetriesExceededError:
+            logger.error(f"Max retries exceeded for webhook dispatch of document {document_id}")
+            raise

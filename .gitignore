@@ -127,3 +127,33 @@ faiss_index/
 logs/
 config.json
 *.ps1
+
+# Secrets and sensitive files
+.env*
+*.key
+*.pem
+*.p12
+*.pfx
+secret*
+credential*
+*_secret*
+*_key*
+*api_key*
+
+# Configuration files that may contain secrets
+config.json
+settings.json
+secrets.json
+credentials.json
+
+# IDE and editor files
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+
+# Backup files
+*.bak
+*.backup
+*.orig

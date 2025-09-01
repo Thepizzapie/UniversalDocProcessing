@@ -13,6 +13,8 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     console.log(`Making ${config.method?.toUpperCase()} request to ${config.url}`);
+    const tenantId = localStorage.getItem('tenantId') || '1'; // Default to tenant ID 1
+    config.headers['X-Tenant-ID'] = tenantId;
     return config;
   },
   (error) => {
@@ -32,6 +34,7 @@ api.interceptors.response.use(
 
 // API service methods
 export const apiService = {
+  setTenantId: (tenantId) => localStorage.setItem('tenantId', tenantId),
   // Health checks
   healthCheck: () => api.get('/health'),
   aiHealthCheck: () => api.get('/ai-health'),
@@ -72,7 +75,7 @@ export const apiService = {
   getDocumentTypeTemplates: () => api.get('/document-types/templates'),
   getDocumentTypeTemplate: (documentType) => api.get(`/document-types/${documentType}/template`),
   getDocumentsByType: (documentType) => api.get(`/document-types/${documentType}/documents`),
-  updateDocumentType: (documentId, newType) => api.put(`/document-types/${documentId}/type`, newType),
+  updateDocumentType: (documentId, newType) => api.put(`/document-types/${documentId}/type?new_type=${newType}`),
   getDocumentTypeStats: () => api.get('/document-types/stats'),
   
   // RAG System
@@ -89,6 +92,14 @@ export const apiService = {
   debugHilFeedback: (documentId, data) => api.post(`/debug/hil/${documentId}`, data),
   debugPipelinePerformance: (documentId, data) => api.post(`/debug/performance/${documentId}`, data),
   getDebugHistory: (documentId) => api.get(`/debug/history/${documentId}`),
+
+  // Document Types API
+  getDocTypeTemplates: () => api.get('/doc-types/templates'),
+  getDocTypes: () => api.get('/doc-types'),
+  createDocType: (data) => api.post('/doc-types', data),
+  updateDocType: (id, data) => api.put(`/doc-types/${id}`, data),
+  deleteDocType: (id) => api.delete(`/doc-types/${id}`),
+  testDocTypeExtraction: (docTypeId, testData) => api.post(`/doc-types/${docTypeId}/test`, testData),
 };
 
 export default api;

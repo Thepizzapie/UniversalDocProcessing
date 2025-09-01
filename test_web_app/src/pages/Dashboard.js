@@ -51,14 +51,14 @@ const Dashboard = () => {
   const getStateColor = (state) => {
     switch (state) {
       case 'APPROVED':
-        return 'bg-green-100 text-green-800';
+        return 'status-success';
       case 'REJECTED':
       case 'FAILED':
-        return 'bg-red-100 text-red-800';
+        return 'status-error';
       case 'FINAL_REVIEW':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'status-warning';
       default:
-        return 'bg-primary-100 text-primary-800';
+        return 'bg-primary-100 dark:bg-primary-700 text-primary-800 dark:text-primary-200';
     }
   };
 
@@ -79,13 +79,13 @@ const Dashboard = () => {
   const getDocumentTypeColor = (type) => {
     switch (type) {
       case 'INVOICE':
-        return 'bg-blue-100 text-blue-700';
+        return 'doc-type-invoice';
       case 'RECEIPT':
-        return 'bg-green-100 text-green-700';
+        return 'doc-type-receipt';
       case 'ENTRY_EXIT_LOG':
-        return 'bg-purple-100 text-purple-700';
+        return 'doc-type-log';
       default:
-        return 'bg-gray-100 text-gray-700';
+        return 'doc-type-default';
     }
   };
 
@@ -96,8 +96,8 @@ const Dashboard = () => {
   if (loading && documents.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
-        <RefreshCw className="h-8 w-8 animate-spin text-primary-500" />
-        <span className="ml-2 text-gray-600">Loading documents...</span>
+        <RefreshCw className="h-8 w-8 animate-spin text-slate-500" />
+        <span className="ml-2 text-secondary">Loading documents...</span>
       </div>
     );
   }
@@ -107,8 +107,8 @@ const Dashboard = () => {
       {/* Header */}
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="mt-2 text-gray-600">
+          <h1 className="text-3xl font-bold text-primary">Dashboard</h1>
+          <p className="mt-2 text-secondary">
             Monitor your document processing pipeline
           </p>
         </div>
@@ -131,8 +131,8 @@ const Dashboard = () => {
       </div>
 
       {error && (
-        <div className="mb-6 p-4 bg-error-50 border border-error-200 rounded-lg">
-          <p className="text-error-700">{error}</p>
+        <div className="mb-6 p-4 status-error rounded-lg">
+          <p>{error}</p>
         </div>
       )}
 
@@ -140,20 +140,20 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <div className="card">
           <div className="flex items-center">
-            <FileText className="h-8 w-8 text-primary-500" />
+            <FileText className="h-8 w-8 text-muted" />
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Total Documents</p>
-              <p className="text-2xl font-bold text-gray-900">{documents.length}</p>
+              <p className="text-sm font-medium text-secondary">Total Documents</p>
+              <p className="text-2xl font-bold text-primary">{documents.length}</p>
             </div>
           </div>
         </div>
         
         <div className="card">
           <div className="flex items-center">
-            <Clock className="h-8 w-8 text-yellow-500" />
+            <Clock className="h-8 w-8 text-yellow-500 dark:text-yellow-400" />
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">In Progress</p>
-              <p className="text-2xl font-bold text-gray-900">
+              <p className="text-sm font-medium text-secondary">In Progress</p>
+              <p className="text-2xl font-bold text-primary">
                 {documents.filter(doc => 
                   !['APPROVED', 'REJECTED', 'FAILED'].includes(doc.state)
                 ).length}
@@ -164,10 +164,10 @@ const Dashboard = () => {
         
         <div className="card">
           <div className="flex items-center">
-            <CheckCircle className="h-8 w-8 text-green-500" />
+            <CheckCircle className="h-8 w-8 text-green-500 dark:text-green-400" />
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Approved</p>
-              <p className="text-2xl font-bold text-gray-900">
+              <p className="text-sm font-medium text-secondary">Approved</p>
+              <p className="text-2xl font-bold text-primary">
                 {documents.filter(doc => doc.state === 'APPROVED').length}
               </p>
             </div>
@@ -176,10 +176,10 @@ const Dashboard = () => {
         
         <div className="card">
           <div className="flex items-center">
-            <XCircle className="h-8 w-8 text-red-500" />
+            <XCircle className="h-8 w-8 text-red-500 dark:text-red-400" />
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Failed/Rejected</p>
-              <p className="text-2xl font-bold text-gray-900">
+              <p className="text-sm font-medium text-secondary">Failed/Rejected</p>
+              <p className="text-2xl font-bold text-primary">
                 {documents.filter(doc => 
                   ['REJECTED', 'FAILED'].includes(doc.state)
                 ).length}
@@ -192,14 +192,14 @@ const Dashboard = () => {
       {/* Documents Table */}
       <div className="card">
         <div className="mb-6">
-          <h2 className="text-xl font-semibold text-gray-900">Recent Documents</h2>
+          <h2 className="text-xl font-semibold text-primary">Recent Documents</h2>
         </div>
         
         {documents.length === 0 ? (
           <div className="text-center py-12">
-            <FileText className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-4 text-lg font-medium text-gray-900">No documents yet</h3>
-            <p className="mt-2 text-gray-600">
+            <FileText className="mx-auto h-12 w-12 text-muted" />
+            <h3 className="mt-4 text-lg font-medium text-primary">No documents yet</h3>
+            <p className="mt-2 text-secondary">
               Get started by processing your first document through the DER pipeline.
             </p>
             <Link to="/upload" className="btn btn-primary mt-4">
@@ -209,37 +209,37 @@ const Dashboard = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+              <thead className="bg-primary-50 dark:bg-primary-700">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                     Document
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                     Type
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                     Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                     Uploaded
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-white dark:bg-primary-800 divide-y divide-primary-200 dark:divide-primary-700">
                 {documents.map((doc) => (
-                  <tr key={doc.document_id} className="hover:bg-gray-50">
+                  <tr key={doc.document_id} className="hover:bg-primary-50 dark:hover:bg-primary-700 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                        <FileText className="h-5 w-5 text-gray-400 mr-3" />
+                        <FileText className="h-5 w-5 text-muted mr-3" />
                         <div>
-                          <div className="text-sm font-medium text-gray-900">
+                          <div className="text-sm font-medium text-primary">
                             {doc.filename}
                           </div>
-                          <div className="text-sm text-gray-500">
+                          <div className="text-sm text-secondary">
                             ID: {doc.document_id}
                           </div>
                         </div>
@@ -256,13 +256,13 @@ const Dashboard = () => {
                         <span className="ml-1">{formatState(doc.state)}</span>
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary">
                       {formatDate(doc.uploaded_at)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <Link
                         to={`/document/${doc.document_id}`}
-                        className="text-primary-600 hover:text-primary-900"
+                        className="text-secondary hover:text-primary transition-colors"
                       >
                         View Details
                       </Link>

@@ -13,6 +13,8 @@ from ..enums import PipelineState
 from ..models import Document
 from ..schemas import IngestRequest, IngestResponse
 from ..services.extraction import extract_document_fields
+from ..utils.validation import validate_document_content
+from ..utils.tenant import get_tenant_id
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
@@ -23,6 +25,7 @@ limiter = Limiter(key_func=get_remote_address)
 def ingest_document(
     request: Request,
     ingest_request: IngestRequest,
+    tenant_id: int = Depends(get_tenant_id),
     # current_user=Depends(get_current_active_user),  # Temporarily disabled for testing
 ):
     """Ingest a new document for processing."""
@@ -31,6 +34,11 @@ def ingest_document(
     if not ingest_request.content and not ingest_request.url and ingest_request.content != "":
         raise HTTPException(status_code=400, detail="Either 'content' or 'url' must be provided")
 
+    # Content validation
+    if ingest_request.content:
+        if not validate_document_content(ingest_request.content, ingest_request.mime_type):
+            raise HTTPException(status_code=400, detail="Invalid or unsupported document content")
+
     # Create document record
     document = Document(
         filename=ingest_request.filename,
@@ -38,6 +46,7 @@ def ingest_document(
         document_type=ingest_request.document_type,
         source_uri=ingest_request.url,
         content=ingest_request.content,  # ADD THE CONTENT!
+        tenant_id=tenant_id,
     )
 
     print(
@@ -81,6 +90,7 @@ async def ingest_uploaded_file(
     file: UploadFile = File(...),
     mime_type: str | None = Form(None),
     document_type: str | None = Form(None),
+    tenant_id: int = Depends(get_tenant_id),
     # current_user=Depends(get_current_active_user),  # Temporarily disabled for testing
 ):
     """Ingest a document via file upload."""
@@ -133,4 +143,5 @@ async def ingest_uploaded_file(
             content=actual_content,
             document_type=doc_type,
         ),
+        tenant_id=tenant_id,
     )

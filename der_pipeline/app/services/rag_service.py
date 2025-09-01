@@ -94,13 +94,18 @@ class RagService:
     def add_rag_document(self, request: RagDocumentCreate) -> RagDocumentResponse:
         """Add a new RAG document with embedding."""
         # Generate embedding for the reference data
-        reference_text = json.dumps(request.reference_data, sort_keys=True)
+        # Support multimodal metadata: images/tables are preserved, embedding uses text-only summary
+        multimodal = request.reference_data
+        text_for_embedding = {
+            k: v for k, v in multimodal.items() if k not in ("images", "tables")
+        }
+        reference_text = json.dumps(text_for_embedding, sort_keys=True)
         embedding = self._generate_embedding(reference_text)
 
         with get_session_sync() as session:
             rag_doc = RagDocument(
                 document_type=request.document_type,
-                reference_data=request.reference_data,
+                reference_data=multimodal,
                 description=request.description,
                 tags=request.tags,
                 embedding_vector=embedding,

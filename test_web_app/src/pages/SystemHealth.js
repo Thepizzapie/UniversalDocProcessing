@@ -73,14 +73,14 @@ const SystemHealth = () => {
     switch (status) {
       case 'healthy':
       case 'available':
-        return 'border-green-200 bg-green-50';
+        return 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900';
       case 'degraded':
-        return 'border-yellow-200 bg-yellow-50';
+        return 'border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900';
       case 'unavailable':
       case 'unhealthy':
-        return 'border-red-200 bg-red-50';
+        return 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900';
       default:
-        return 'border-gray-200 bg-gray-50';
+        return 'border-primary-200 dark:border-primary-700 bg-primary-50 dark:bg-primary-800';
     }
   };
 
@@ -88,7 +88,7 @@ const SystemHealth = () => {
     return (
       <div className="flex items-center justify-center h-64">
         <RefreshCw className="h-8 w-8 animate-spin text-primary-500" />
-        <span className="ml-2 text-gray-600">Checking system health...</span>
+        <span className="ml-2 text-secondary">Checking system health...</span>
       </div>
     );
   }
@@ -98,8 +98,8 @@ const SystemHealth = () => {
       {/* Header */}
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">System Health</h1>
-          <p className="mt-2 text-gray-600">
+          <h1 className="text-3xl font-bold text-primary">System Health</h1>
+          <p className="mt-2 text-secondary">
             Monitor the status of all system components
           </p>
         </div>
@@ -115,8 +115,8 @@ const SystemHealth = () => {
       </div>
 
       {healthData.error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-red-700">{healthData.error}</p>
+        <div className="mb-6 p-4 status-error rounded-lg">
+          <p>{healthData.error}</p>
         </div>
       )}
 
@@ -124,10 +124,10 @@ const SystemHealth = () => {
       <div className="card mb-8">
         <div className="flex items-center justify-between">
           <div className="flex items-center">
-            <Activity className="h-8 w-8 text-primary-500 mr-4" />
+            <Activity className="h-8 w-8 text-accent-500 mr-4" />
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">Overall Status</h2>
-              <p className="text-gray-600">DER Pipeline System</p>
+              <h2 className="text-xl font-semibold text-primary">Overall Status</h2>
+              <p className="text-secondary">DER Pipeline System</p>
             </div>
           </div>
           
@@ -135,12 +135,12 @@ const SystemHealth = () => {
             {healthData.api?.status === 'healthy' && healthData.ai?.status === 'available' ? (
               <>
                 <CheckCircle className="h-8 w-8 text-green-500 mr-2" />
-                <span className="text-lg font-medium text-green-700">All Systems Operational</span>
+                <span className="text-lg font-medium text-green-700 dark:text-green-300">All Systems Operational</span>
               </>
             ) : (
               <>
                 <XCircle className="h-8 w-8 text-red-500 mr-2" />
-                <span className="text-lg font-medium text-red-700">Issues Detected</span>
+                <span className="text-lg font-medium text-red-700 dark:text-red-300">Issues Detected</span>
               </>
             )}
           </div>
@@ -153,28 +153,28 @@ const SystemHealth = () => {
         <div className={`card border-2 ${getStatusColor(healthData.api?.status)}`}>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center">
-              <Server className="h-6 w-6 text-gray-700 mr-3" />
-              <h3 className="text-lg font-semibold text-gray-900">API Service</h3>
+              <Server className="h-6 w-6 text-primary mr-3" />
+              <h3 className="text-lg font-semibold text-primary">API Service</h3>
             </div>
             {getStatusIcon(healthData.api?.status)}
           </div>
           
           <div className="space-y-2">
             <div className="flex justify-between">
-              <span className="text-sm text-gray-600">Status:</span>
+              <span className="text-sm text-secondary">Status:</span>
               <span className="text-sm font-medium">{healthData.api?.status || 'Unknown'}</span>
             </div>
             
             {healthData.api?.version && (
               <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Version:</span>
+                <span className="text-sm text-secondary">Version:</span>
                 <span className="text-sm font-medium">{healthData.api.version}</span>
               </div>
             )}
             
             {healthData.api?.message && (
               <div className="mt-3">
-                <p className="text-sm text-gray-700">{healthData.api.message}</p>
+                <p className="text-sm text-primary">{healthData.api.message}</p>
               </div>
             )}
           </div>
@@ -184,35 +184,35 @@ const SystemHealth = () => {
         <div className={`card border-2 ${getStatusColor(healthData.ai?.status)}`}>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center">
-              <Brain className="h-6 w-6 text-gray-700 mr-3" />
-              <h3 className="text-lg font-semibold text-gray-900">AI Service</h3>
+              <Brain className="h-6 w-6 text-primary mr-3" />
+              <h3 className="text-lg font-semibold text-primary">AI Service</h3>
             </div>
             {getStatusIcon(healthData.ai?.status)}
           </div>
           
           <div className="space-y-2">
             <div className="flex justify-between">
-              <span className="text-sm text-gray-600">Status:</span>
+              <span className="text-sm text-secondary">Status:</span>
               <span className="text-sm font-medium">{healthData.ai?.status || 'Unknown'}</span>
             </div>
             
             {healthData.ai?.openai_status && (
               <div className="flex justify-between">
-                <span className="text-sm text-gray-600">OpenAI:</span>
+                <span className="text-sm text-secondary">OpenAI:</span>
                 <span className="text-sm font-medium">{healthData.ai.openai_status}</span>
               </div>
             )}
             
             {healthData.ai?.crewai_status && (
               <div className="flex justify-between">
-                <span className="text-sm text-gray-600">CrewAI:</span>
+                <span className="text-sm text-secondary">CrewAI:</span>
                 <span className="text-sm font-medium">{healthData.ai.crewai_status}</span>
               </div>
             )}
             
             {healthData.ai?.message && (
               <div className="mt-3">
-                <p className="text-sm text-gray-700">{healthData.ai.message}</p>
+                <p className="text-sm text-primary">{healthData.ai.message}</p>
               </div>
             )}
           </div>
@@ -221,7 +221,7 @@ const SystemHealth = () => {
 
       {/* Service Endpoints */}
       <div className="card">
-        <h3 className="text-lg font-semibold text-gray-900 mb-6">Available Endpoints</h3>
+        <h3 className="text-lg font-semibold text-primary mb-6">Available Endpoints</h3>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[
@@ -234,11 +234,11 @@ const SystemHealth = () => {
           ].map((service) => {
             const Icon = service.icon;
             return (
-              <div key={service.name} className="flex items-center p-3 bg-gray-50 rounded-lg">
-                <Icon className="h-5 w-5 text-gray-600 mr-3" />
+              <div key={service.name} className="flex items-center p-3 bg-primary-50 dark:bg-primary-700 rounded-lg">
+                <Icon className="h-5 w-5 text-secondary mr-3" />
                 <div>
-                  <p className="text-sm font-medium text-gray-900">{service.name}</p>
-                  <p className="text-xs text-gray-600">{service.endpoint}</p>
+                  <p className="text-sm font-medium text-primary">{service.name}</p>
+                  <p className="text-xs text-secondary">{service.endpoint}</p>
                 </div>
               </div>
             );
@@ -248,8 +248,8 @@ const SystemHealth = () => {
 
       {/* Quick Test Section */}
       <div className="card mt-8">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Test</h3>
-        <p className="text-gray-600 mb-4">
+        <h3 className="text-lg font-semibold text-primary mb-4">Quick Test</h3>
+        <p className="text-secondary mb-4">
           Test the AI extraction service with sample text
         </p>
         

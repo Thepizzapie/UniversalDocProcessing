@@ -8,21 +8,53 @@ const RagManager = () => {
   const [ragDocuments, setRagDocuments] = useState([]);
   const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [selectedType, setSelectedType] = useState('INVOICE');
+  const [selectedType, setSelectedType] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchPerformed, setSearchPerformed] = useState(false);
+  const [documentTypes, setDocumentTypes] = useState([]);
 
   useEffect(() => {
-    loadRagDocuments();
+    loadDocumentTypes();
+  }, []);
+
+  useEffect(() => {
+    if (selectedType) {
+      loadRagDocuments();
+    }
   }, [selectedType]);
 
+  const loadDocumentTypes = async () => {
+    try {
+      const response = await apiService.getDocTypes();
+      const types = response.data || [];
+      setDocumentTypes(types);
+      // Set first type as default if available
+      if (types.length > 0 && !selectedType) {
+        setSelectedType(types[0].name);
+      }
+    } catch (err) {
+      console.error('Failed to load document types:', err);
+    }
+  };
+
   const loadRagDocuments = async () => {
+    if (!selectedType) return;
+    
     setLoading(true);
     try {
-      const response = await apiService.getRagDocuments(selectedType);
-      setRagDocuments(response.data);
+      // Check if this is a legacy document type that the RAG system supports
+      const legacyTypes = ['INVOICE', 'RECEIPT', 'ENTRY_EXIT_LOG'];
+      if (legacyTypes.includes(selectedType)) {
+        const response = await apiService.getRagDocuments(selectedType);
+        setRagDocuments(response.data);
+      } else {
+        // For custom document types, show empty state with explanation
+        setRagDocuments([]);
+        console.warn(`Custom document type '${selectedType}' not yet supported by RAG system`);
+      }
     } catch (err) {
       console.error('Failed to load RAG documents:', err);
+      setRagDocuments([]);
     } finally {
       setLoading(false);
     }
@@ -94,11 +126,7 @@ const RagManager = () => {
     }
   };
 
-  const documentTypeOptions = [
-    { value: 'INVOICE', label: 'Invoice' },
-    { value: 'RECEIPT', label: 'Receipt' },
-    { value: 'ENTRY_EXIT_LOG', label: 'Entry/Exit Log' }
-  ];
+  // Document type options are now loaded dynamically from the API
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -108,14 +136,14 @@ const RagManager = () => {
           <div className="flex items-center">
             <button
               onClick={() => navigate(-1)}
-              className="mr-4 p-2 text-gray-400 hover:text-gray-600"
+              className="mr-4 p-2 text-muted hover:text-primary"
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
-            <Database className="h-8 w-8 text-blue-500 mr-3" />
+            <Database className="h-8 w-8 text-accent-500 mr-3" />
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">RAG Knowledge Base Manager</h1>
-              <p className="mt-2 text-gray-600">
+              <h1 className="text-3xl font-bold text-primary">RAG Knowledge Base Manager</h1>
+              <p className="mt-2 text-secondary">
                 Manage reference documents for improved reconciliation accuracy
               </p>
             </div>
@@ -142,9 +170,10 @@ const RagManager = () => {
               onChange={(e) => setSelectedType(e.target.value)}
               className="input"
             >
-              {documentTypeOptions.map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
+              <option value="">Select document type...</option>
+              {documentTypes.map(type => (
+                <option key={type.id} value={type.name}>
+                  {type.name}
                 </option>
               ))}
             </select>
@@ -183,35 +212,35 @@ const RagManager = () => {
       </div>
 
       {/* Stats */}
-      <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="card-secondary">
           <div className="flex items-center">
-            <Database className="h-6 w-6 text-blue-500 mr-2" />
+            <Database className="h-6 w-6 text-accent-500 mr-2" />
             <div>
-              <div className="text-2xl font-bold text-blue-900">{ragDocuments.length}</div>
-              <div className="text-sm text-blue-600">Reference Documents</div>
+              <div className="text-2xl font-bold text-primary">{ragDocuments.length}</div>
+              <div className="text-sm text-secondary">Reference Documents</div>
             </div>
           </div>
         </div>
         
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+        <div className="card-secondary">
           <div className="flex items-center">
-            <Search className="h-6 w-6 text-green-500 mr-2" />
+            <Search className="h-6 w-6 text-green-500 dark:text-green-400 mr-2" />
             <div>
-              <div className="text-2xl font-bold text-green-900">{searchResults.length}</div>
-              <div className="text-sm text-green-600">Search Results</div>
+              <div className="text-2xl font-bold text-primary">{searchResults.length}</div>
+              <div className="text-sm text-secondary">Search Results</div>
             </div>
           </div>
         </div>
         
-        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+        <div className="card-secondary">
           <div className="flex items-center">
-            <Tag className="h-6 w-6 text-purple-500 mr-2" />
+            <Tag className="h-6 w-6 text-purple-500 dark:text-purple-400 mr-2" />
             <div>
-              <div className="text-2xl font-bold text-purple-900">
+              <div className="text-2xl font-bold text-primary">
                 {ragDocuments.reduce((total, doc) => total + doc.tags.length, 0)}
               </div>
-              <div className="text-sm text-purple-600">Total Tags</div>
+              <div className="text-sm text-secondary">Total Tags</div>
             </div>
           </div>
         </div>
@@ -220,15 +249,15 @@ const RagManager = () => {
       {/* Search Results */}
       {searchPerformed && (
         <div className="mb-8">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">
+          <h2 className="text-lg font-medium text-primary mb-4">
             Search Results ({searchResults.length})
           </h2>
           
           {searchResults.length === 0 ? (
             <div className="card text-center py-8">
-              <Search className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-              <p className="text-gray-500">No matching reference documents found</p>
-              <p className="text-sm text-gray-400">Try adjusting your search terms or similarity threshold</p>
+              <Search className="h-8 w-8 mx-auto mb-2 text-muted" />
+              <p className="text-secondary">No matching reference documents found</p>
+              <p className="text-sm text-muted">Try adjusting your search terms or similarity threshold</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -241,7 +270,7 @@ const RagManager = () => {
                       </span>
                       <div className="flex flex-wrap gap-1">
                         {result.tags.map(tag => (
-                          <span key={tag} className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
+                          <span key={tag} className="px-2 py-1 bg-primary-100 dark:bg-primary-700 text-primary text-xs rounded">
                             {tag}
                           </span>
                         ))}
@@ -250,10 +279,10 @@ const RagManager = () => {
                   </div>
                   
                   {result.description && (
-                    <p className="text-gray-700 mb-3">{result.description}</p>
+                    <p className="text-primary mb-3">{result.description}</p>
                   )}
                   
-                  <pre className="text-xs text-gray-600 bg-gray-50 p-3 rounded border overflow-x-auto">
+                  <pre className="text-xs text-secondary bg-primary-50 dark:bg-primary-700 p-3 rounded border border-primary-200 dark:border-primary-600 overflow-x-auto">
                     {JSON.stringify(result.reference_data, null, 2)}
                   </pre>
                 </div>
@@ -266,27 +295,39 @@ const RagManager = () => {
       {/* All Reference Documents */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-medium text-gray-900">
-            All {selectedType.replace(/_/g, ' ')} References ({ragDocuments.length})
+          <h2 className="text-lg font-medium text-primary">
+            All {selectedType} References ({ragDocuments.length})
           </h2>
         </div>
         
         {loading ? (
           <div className="card text-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-            <p className="text-gray-600">Loading reference documents...</p>
+            <p className="text-secondary">Loading reference documents...</p>
           </div>
         ) : ragDocuments.length === 0 ? (
           <div className="card text-center py-8">
-            <BookOpen className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-            <p className="text-gray-500">No reference documents found for {selectedType.replace(/_/g, ' ')}</p>
-            <p className="text-sm text-gray-400">Add some reference data to improve reconciliation accuracy</p>
-            <button
-              onClick={() => navigate('/rag-upload')}
-              className="btn btn-primary mt-4"
-            >
-              Add First Reference
-            </button>
+            <BookOpen className="h-8 w-8 mx-auto mb-2 text-muted" />
+            {['INVOICE', 'RECEIPT', 'ENTRY_EXIT_LOG'].includes(selectedType) ? (
+              <>
+                <p className="text-secondary">No reference documents found for {selectedType}</p>
+                <p className="text-sm text-muted">Add some reference data to improve reconciliation accuracy</p>
+                <button
+                  onClick={() => navigate('/rag-upload')}
+                  className="btn btn-primary mt-4"
+                >
+                  Add First Reference
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-secondary">RAG system not yet available for custom document type: {selectedType}</p>
+                <p className="text-sm text-muted">
+                  The RAG knowledge base currently only supports legacy document types (INVOICE, RECEIPT, ENTRY_EXIT_LOG).
+                  Support for custom document types will be added in a future update.
+                </p>
+              </>
+            )}
           </div>
         ) : (
           <div className="space-y-4">
@@ -294,16 +335,16 @@ const RagManager = () => {
               <div key={doc.id} className="card">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center space-x-3">
-                    <BookOpen className="h-5 w-5 text-gray-400" />
+                    <BookOpen className="h-5 w-5 text-muted" />
                     <div>
-                      <h3 className="font-medium text-gray-900">
+                      <h3 className="font-medium text-primary">
                         {doc.description || `Reference #${doc.id}`}
                       </h3>
                       <div className="flex items-center space-x-2 mt-1">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${getTypeColor(selectedType)}`}>
-                          {selectedType.replace(/_/g, ' ')}
+                        <span className="px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-100">
+                          {selectedType}
                         </span>
-                        <span className="text-xs text-gray-500">
+                        <span className="text-xs text-muted">
                           Created: {formatDate(doc.created_at)}
                         </span>
                       </div>
@@ -324,7 +365,7 @@ const RagManager = () => {
                 {doc.tags.length > 0 && (
                   <div className="flex flex-wrap gap-2 mb-3">
                     {doc.tags.map(tag => (
-                      <span key={tag} className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full flex items-center">
+                      <span key={tag} className="px-2 py-1 bg-accent-100 dark:bg-accent-900 text-accent-700 dark:text-accent-200 text-xs rounded-full flex items-center">
                         <Tag className="h-3 w-3 mr-1" />
                         {tag}
                       </span>
@@ -332,7 +373,7 @@ const RagManager = () => {
                   </div>
                 )}
                 
-                <pre className="text-xs text-gray-600 bg-gray-50 p-3 rounded border overflow-x-auto">
+                <pre className="text-xs text-secondary bg-primary-50 dark:bg-primary-700 p-3 rounded border border-primary-200 dark:border-primary-600 overflow-x-auto">
                   {JSON.stringify(doc.reference_data, null, 2)}
                 </pre>
               </div>

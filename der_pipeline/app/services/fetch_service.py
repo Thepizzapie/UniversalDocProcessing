@@ -11,6 +11,7 @@ from ..models import Document, FetchJob
 from ..schemas import FetchedRecord
 from .audit import log_audit_event
 from .connectors import accounting_api, dummy_json, rest_endpoint, sql_query
+from .connectors import quickbooks, xero, sftp
 
 
 class FetchService:
@@ -40,6 +41,12 @@ class FetchService:
             elif target == "accounting_api":
                 api_config = {"endpoint": "https://api.demo-accounting.com", "api_key": "demo_key"}
                 payload = accounting_api.fetch_data(api_config, document_data)
+            elif target == "quickbooks":
+                payload = quickbooks.fetch_data({}, document_data)
+            elif target == "xero":
+                payload = xero.fetch_data({}, document_data)
+            elif target == "sftp":
+                payload = sftp.fetch_data({"path": "/uploads/reference.csv"}, document_data)
             elif target.startswith("http"):
                 # REST endpoint
                 payload = rest_endpoint.fetch_data_sync(target, document_data)

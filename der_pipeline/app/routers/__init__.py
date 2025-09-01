@@ -6,6 +6,7 @@ from .hil import router as hil_router
 from .ingest import router as ingest_router
 from .reconcile import router as reconcile_router
 from .reports import router as reports_router
+from .tenants import router as tenants_router
 
 __all__ = [
     "ingest_router",
@@ -14,4 +15,5 @@ __all__ = [
     "reconcile_router",
     "finalize_router",
     "reports_router",
+    "tenants_router",
 ]

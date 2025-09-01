@@ -64,7 +64,7 @@ class CrewAIService:
         return self._enabled and self._crew is not None
 
     def extract_document_data(
-        self, document_text: str, document_type: str = "invoice"
+        self, document_text: str, document_type: str = "invoice", expected_fields: list[str] | None = None
     ) -> ExtractedRecord | None:
         """Extract structured data from document using CrewAI agents."""
         print(f"DEBUG: extract_document_data called with type: {document_type}")
@@ -78,7 +78,8 @@ class CrewAIService:
 
         try:
             print(f"DEBUG: Calling crew.extract_data with text length: {len(document_text)}")
-            result = self._crew.extract_data(document_text, document_type)
+            print(f"DEBUG: Expected fields: {expected_fields}")
+            result = self._crew.extract_data(document_text, document_type, expected_fields)
             print(f"DEBUG: CrewAI extraction completed! Result type: {type(result)}")
             if result:
                 print(f"DEBUG: Result has {len(result.root)} fields")

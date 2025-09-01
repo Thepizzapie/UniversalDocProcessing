@@ -131,8 +131,8 @@ const RagManager = ({ documentType = 'INVOICE' }) => {
     <div className="card">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center">
-          <Database className="h-5 w-5 text-blue-500 mr-2" />
-          <h3 className="text-lg font-medium text-gray-900">RAG Knowledge Base</h3>
+          <Database className="h-5 w-5 text-accent-500 mr-2" />
+          <h3 className="text-lg font-medium text-primary">RAG Knowledge Base</h3>
         </div>
         <div className="flex space-x-2">
           <button
@@ -153,7 +153,7 @@ const RagManager = ({ documentType = 'INVOICE' }) => {
 
       {/* Document Type Filter */}
       <div className="mb-6">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="label">
           Document Type
         </label>
         <select
@@ -194,8 +194,8 @@ const RagManager = ({ documentType = 'INVOICE' }) => {
 
       {/* Add Form */}
       {showAddForm && (
-        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <h4 className="font-medium text-blue-900 mb-4">Add Reference Document</h4>
+        <div className="mb-6 p-4 bg-accent-50 dark:bg-accent-900 border border-accent-200 dark:border-accent-800 rounded-lg">
+          <h4 className="font-medium text-accent-900 dark:text-accent-100 mb-4">Add Reference Document</h4>
           
           <div className="space-y-4">
             <div>
@@ -232,12 +232,12 @@ const RagManager = ({ documentType = 'INVOICE' }) => {
                 {newRagDoc.tags.map(tag => (
                   <span
                     key={tag}
-                    className="px-2 py-1 bg-blue-100 text-blue-700 text-sm rounded-full flex items-center"
+                    className="px-2 py-1 bg-accent-100 dark:bg-accent-900 text-accent-700 dark:text-accent-200 text-sm rounded-full flex items-center"
                   >
                     {tag}
                     <button
                       onClick={() => removeTag(tag)}
-                      className="ml-1 text-blue-500 hover:text-blue-700"
+                      className="ml-1 text-accent-500 hover:text-accent-700 dark:text-accent-400 dark:hover:text-accent-300"
                     >
                       ×
                     </button>
@@ -278,26 +278,26 @@ const RagManager = ({ documentType = 'INVOICE' }) => {
       {/* Search Results */}
       {searchResults.length > 0 && (
         <div className="mb-6">
-          <h4 className="font-medium text-gray-900 mb-3">Search Results</h4>
+          <h4 className="font-medium text-primary mb-3">Search Results</h4>
           <div className="space-y-3">
             {searchResults.map((result, index) => (
-              <div key={index} className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <div key={index} className="p-3 bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-800 rounded-lg">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-yellow-800">
+                  <span className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
                     Similarity: {(result.similarity_score * 100).toFixed(1)}%
                   </span>
                   <div className="flex flex-wrap gap-1">
                     {result.tags.map(tag => (
-                      <span key={tag} className="px-2 py-1 bg-yellow-200 text-yellow-700 text-xs rounded">
+                      <span key={tag} className="px-2 py-1 bg-yellow-200 dark:bg-yellow-800 text-yellow-700 dark:text-yellow-200 text-xs rounded">
                         {tag}
                       </span>
                     ))}
                   </div>
                 </div>
                 {result.description && (
-                  <p className="text-sm text-gray-700 mb-2">{result.description}</p>
+                  <p className="text-sm text-primary mb-2">{result.description}</p>
                 )}
-                <pre className="text-xs text-gray-600 bg-white p-2 rounded border overflow-x-auto">
+                <pre className="text-xs text-secondary bg-white dark:bg-primary-800 p-2 rounded border border-primary-200 dark:border-primary-700 overflow-x-auto">
                   {JSON.stringify(result.reference_data, null, 2)}
                 </pre>
               </div>
@@ -308,24 +308,24 @@ const RagManager = ({ documentType = 'INVOICE' }) => {
 
       {/* Reference Documents List */}
       <div>
-        <h4 className="font-medium text-gray-900 mb-3">
+        <h4 className="font-medium text-primary mb-3">
           Reference Documents ({ragDocuments.length})
         </h4>
         
         {ragDocuments.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <BookOpen className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+          <div className="text-center py-8 text-secondary">
+            <BookOpen className="h-8 w-8 mx-auto mb-2 text-muted" />
             <p>No reference documents found for {selectedType}</p>
             <p className="text-sm">Add some reference data to improve reconciliation accuracy</p>
           </div>
         ) : (
           <div className="space-y-3">
             {ragDocuments.map((doc) => (
-              <div key={doc.id} className="p-4 border border-gray-200 rounded-lg">
+              <div key={doc.id} className="p-4 border border-primary-200 dark:border-primary-700 rounded-lg">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center">
-                    <BookOpen className="h-4 w-4 text-gray-400 mr-2" />
-                    <span className="font-medium text-gray-900">
+                    <BookOpen className="h-4 w-4 text-muted mr-2" />
+                    <span className="font-medium text-primary">
                       {doc.description || `Reference #${doc.id}`}
                     </span>
                   </div>
@@ -340,7 +340,7 @@ const RagManager = ({ documentType = 'INVOICE' }) => {
                 {doc.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1 mb-2">
                     {doc.tags.map(tag => (
-                      <span key={tag} className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
+                      <span key={tag} className="px-2 py-1 bg-primary-100 dark:bg-primary-700 text-primary text-xs rounded">
                         <Tag className="h-3 w-3 inline mr-1" />
                         {tag}
                       </span>
@@ -348,11 +348,11 @@ const RagManager = ({ documentType = 'INVOICE' }) => {
                   </div>
                 )}
                 
-                <pre className="text-xs text-gray-600 bg-gray-50 p-2 rounded border overflow-x-auto">
+                <pre className="text-xs text-secondary bg-primary-50 dark:bg-primary-700 p-2 rounded border border-primary-200 dark:border-primary-600 overflow-x-auto">
                   {JSON.stringify(doc.reference_data, null, 2)}
                 </pre>
                 
-                <div className="mt-2 text-xs text-gray-500">
+                <div className="mt-2 text-xs text-muted">
                   Created: {new Date(doc.created_at).toLocaleDateString()}
                 </div>
               </div>

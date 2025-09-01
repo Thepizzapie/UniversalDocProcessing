@@ -205,7 +205,7 @@ class DocumentExtractionAgent:
             func=extract_data,
         )
 
-    def extract_fields(self, document_text: str, document_type: str = "invoice") -> ExtractedRecord:
+    def extract_fields(self, document_text: str, document_type: str = "invoice", expected_fields: list[str] | None = None) -> ExtractedRecord:
         """Extract fields from document text using direct LLM chain."""
 
         print(f"DEBUG: DocumentExtractionAgent.extract_fields called with type: {document_type}")
@@ -217,6 +217,21 @@ class DocumentExtractionAgent:
             specific_instructions = self.extraction_templates.get(
                 document_type, self.extraction_templates["UNKNOWN"]
             )
+
+            # If expected fields are provided, customize the instructions
+            if expected_fields:
+                print(f"DEBUG: Customizing extraction for expected fields: {expected_fields}")
+                specific_instructions = f"""
+                Focus specifically on extracting these exact fields: {', '.join(expected_fields)}
+                
+                Return a JSON object with exactly these field names:
+                {chr(10).join([f'- {field}' for field in expected_fields])}
+                
+                If a field is not found in the document, set its value to null.
+                Each field should have: value, confidence (0.0-1.0), and type_hint.
+                
+                Original instructions: {specific_instructions}
+                """
 
             # Use the LLM directly with the prompt
             prompt_text = self.extraction_prompt.format(
@@ -247,6 +262,8 @@ class DocumentExtractionAgent:
                 - value: The extracted value (null if not found)
                 - confidence: Your confidence (0.0-1.0)  
                 - type_hint: Data type ("text", "number", "date", "currency", etc.)
+                
+                {"IMPORTANT: Focus on these specific fields: " + ', '.join(expected_fields) if expected_fields else ""}
                 """
 
                 message = HumanMessage(
