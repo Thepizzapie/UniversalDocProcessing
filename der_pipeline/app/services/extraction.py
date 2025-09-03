@@ -526,10 +526,10 @@ Status: Active
     def _expected_fields_for_doc_type(document_type: str, document: Document | None = None) -> list[str]:
         """Return required+optional field names for a given document type.
 
-        Looks up tenant-specific CustomDocTypeDefinition if available.
+        ONLY uses custom document types - no hardcoded fallbacks.
         """
 
-        # Try custom definition first - use fuzzy matching
+        # Always use custom document types only
         from ..db import get_session_sync
 
         with get_session_sync() as session:
@@ -549,11 +549,12 @@ Status: Active
                     if name_lower == doc_type_lower:
                         matching_def = custom_def
                         break
-                    # Check for partial matches (e.g., "Purchase Receipt" matches "RECEIPT")
+                    # Check for partial matches
                     elif (doc_type_lower in name_lower or 
                           'receipt' in name_lower and 'receipt' in doc_type_lower or
                           'invoice' in name_lower and 'invoice' in doc_type_lower or
-                          'purchase' in name_lower and 'receipt' in doc_type_lower):
+                          'harvest' in name_lower and 'load' in doc_type_lower or
+                          'custom' in name_lower and 'document' in doc_type_lower):
                         matching_def = custom_def
                         break
                 
@@ -562,64 +563,16 @@ Status: Active
                     logger.info(f"Found custom schema '{matching_def.name}' for document type '{document_type}': {list(schema.keys())}")
                     return list(schema.keys())
                 else:
-                    logger.info(f"No custom schema found for document type '{document_type}', available custom types: {[cd.name for cd in custom_defs]}")
+                    logger.warning(f"No custom schema found for document type '{document_type}', available custom types: {[cd.name for cd in custom_defs]}")
+                    # Return empty list - no hardcoded fallbacks
+                    return []
             else:
-                logger.info(f"No tenant_id available for document, cannot lookup custom schemas")
+                logger.warning(f"No tenant_id available for document, cannot lookup custom schemas")
+                return []
 
-        doc_type = (document_type or "UNKNOWN").upper()
-        if doc_type == "INVOICE":
-            return [
-                "invoice_number",
-                "vendor_name",
-                "invoice_date",
-                "total_amount",
-                "currency",
-                "vendor_address",
-                "vendor_tax_id",
-                "due_date",
-                "subtotal",
-                "tax_amount",
-                "line_items",
-                "payment_terms",
-            ]
-        if doc_type == "RECEIPT":
-            return [
-                "merchant_name",
-                "transaction_date",
-                "total_amount",
-                "currency",
-                "merchant_address",
-                "transaction_time",
-                "tax_amount",
-                "payment_method",
-                "items",
-                "receipt_number",
-            ]
-        if doc_type == "ENTRY_EXIT_LOG":
-            return [
-                "person_name",
-                "location",
-                "person_id",
-                "entry_time",
-                "exit_time",
-                "purpose",
-                "authorized_by",
-                "badge_number",
-                "vehicle_info",
-            ]
-        return [
-            "document_type",
-            "date",
-            "amount",
-            "currency",
-            "company_name",
-            "person_name",
-            "address",
-            "phone_number",
-            "email",
-            "reference_number",
-            "description",
-        ]
+        # No hardcoded schemas - only use custom document types
+        logger.warning(f"No custom document type found for '{document_type}' - only custom types are supported")
+        return []
 
     @staticmethod
     def process_document(document_id: int) -> ExtractedRecord:

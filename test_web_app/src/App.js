@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-route
 import Navbar from './components/Navbar';
 import Dashboard from './pages/Dashboard';
 import DocumentUpload from './pages/DocumentUpload';
-import DocumentDetail from './pages/DocumentDetail';
+import DocumentDetailV2 from './pages/DocumentDetailV2';
 import Rag from './pages/Rag';
 import Settings from './pages/Settings';
 import DocTypes from './pages/DocTypes';
@@ -49,7 +49,9 @@ function App() {
             <Route path="/" element={<Landing />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/upload" element={<DocumentUpload />} />
-            <Route path="/document/:id" element={<DocumentDetail />} />
+              <Route path="/document/:id" element={<DocumentDetailV2 />} />
+            <Route path="/document-v2/:id" element={<DocumentDetailV2 />} />
+              {/* Keep /document-v2 for back-compat if needed */}
             <Route path="/settings" element={<Settings />} />
             <Route path="/doc-types" element={<DocTypes />} />
             <Route path="/rag" element={<Rag />} />

@@ -1,0 +1,25 @@
+WAL-MART SUPERCENTER
+MANAGER MEGAN JONES
+4610 CENTRAL AVE
+MONROE, LA 71203
+(318) 387-5157
+
+ST# 2348 OP# 00002549 TE# 81 TR# 6063
+BANANAS 4011 1.68 LB @ 0.98/LB  1.65
+MILK GALLON GREAT VALUE         2.97
+BREAD WHOLE WHEAT               1.98
+CHEESE SLICES KRAFT             3.48
+EGGS LARGE DOZEN                2.84
+GROUND BEEF 1LB 80/20          4.97
+CHICKEN BREAST 2.5LB           8.74
+TOMATOES 3 CT                   2.86
+ONIONS 3LB BAG                  1.98
+
+SUBTOTAL                       31.47
+TAX                             2.73
+TOTAL                          34.20
+
+VISA ENDING IN 4567           -34.20
+CHANGE                          0.00
+
+DATE: 08/31/2025  TIME: 14:23:17

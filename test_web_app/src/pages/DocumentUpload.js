@@ -102,8 +102,8 @@ const DocumentUpload = () => {
       );
       console.log('Upload response:', response.data);
       
-      // Navigate to document detail page
-      navigate(`/document/${response.data.document_id}`);
+  // Navigate to new document detail (v2)
+  navigate(`/document-v2/${response.data.document_id}`);
     } catch (err) {
       setError(err.response?.data?.detail || 'Upload failed');
     } finally {
@@ -142,8 +142,8 @@ const DocumentUpload = () => {
       const response = await apiService.ingestDocument(requestData);
       console.log('Ingest response:', response.data);
       
-      // Navigate to document detail page
-      navigate(`/document/${response.data.document_id}`);
+  // Navigate to new document detail (v2)
+  navigate(`/document-v2/${response.data.document_id}`);
     } catch (err) {
       setError(err.response?.data?.detail || 'Ingest failed');
     } finally {
@@ -207,7 +207,7 @@ const DocumentUpload = () => {
         </div>
       </div>
 
-      {/* Document Type Selection */}
+      {/* Document Type Selection (Dropdown) */}
       <div className="mb-8">
         <div className="card">
           <div className="flex items-center mb-4">
@@ -215,50 +215,55 @@ const DocumentUpload = () => {
             <h3 className="text-lg font-medium text-primary">Document Type</h3>
           </div>
           <p className="text-sm text-secondary mb-4">
-            Select the type of document to enable specialized processing and validation
+            Select a custom document type to route this file through the correct schema and pipeline
           </p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-      {documentTypes.map((type) => {
-        const schemaFields = Object.keys(type.output_schema || {});
-        const pipelineSteps = type.pipeline_config?.steps || [];
-        const hasDualSchema = type.output_schema && Object.values(type.output_schema).some(field =>
-          field.type === 'array' && field.items && typeof field.items === 'object'
-        );
 
-        return (
-          <button
-            key={type.id}
-            onClick={() => {
-              console.log('DocumentUpload: Selected custom type:', type.name, {
-                schemaFields: schemaFields.length,
-                pipelineSteps: pipelineSteps.length,
-                hasDualSchema
-              });
-              setDocumentType(type.name);
-              setSelectedCustomName(type.name);
-            }}
-            className={`p-4 rounded-lg border text-left transition-colors ${
-              selectedCustomName === type.name
-                ? 'border-accent-500 bg-accent-50 dark:bg-accent-900 text-accent-900 dark:text-accent-100'
-                : 'border-primary-200 dark:border-primary-700 hover:border-primary-300 dark:hover:border-primary-600 hover:bg-primary-50 dark:hover:bg-primary-700'
-            }`}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="font-medium text-sm">{type.name}</div>
-              {hasDualSchema && (
-                <span className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded-full">
-                  Dual Schema
-                </span>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+            <div>
+              <label className="label">Custom Doc Type</label>
+              <select
+                className="input"
+                value={selectedCustomName}
+                onChange={(e) => {
+                  const name = e.target.value;
+                  setSelectedCustomName(name);
+                  setDocumentType(name);
+                }}
+              >
+                <option value="">Select type…</option>
+                {documentTypes.map((type) => (
+                  <option key={type.id} value={type.name}>{type.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="md:col-span-2">
+              {selectedCustomName ? (
+                (() => {
+                  const type = documentTypes.find((t) => t.name === selectedCustomName);
+                  const schemaFields = Object.keys(type?.output_schema || {});
+                  const pipelineSteps = type?.pipeline_config?.steps || [];
+                  const hasDualSchema = !!type && Object.values(type.output_schema || {}).some((field) => field?.type === 'array' && field.items && typeof field.items === 'object');
+                  return (
+                    <div className="p-3 rounded border border-primary-200 dark:border-primary-700 bg-primary-50 dark:bg-primary-800">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="font-medium text-sm">{type?.name}</div>
+                        {hasDualSchema && (
+                          <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full">Dual Schema</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-secondary mb-1">{type?.description || 'Custom document type'}</div>
+                      <div className="flex items-center gap-4 text-xs text-gray-500">
+                        <span>{schemaFields.length} fields</span>
+                        <span>{pipelineSteps.length} steps</span>
+                      </div>
+                    </div>
+                  );
+                })()
+              ) : (
+                <div className="text-sm text-secondary">Choose a type to see schema and pipeline details</div>
               )}
             </div>
-            <div className="text-xs text-muted mb-2">{type.description || 'Custom document type'}</div>
-            <div className="flex items-center justify-between text-xs text-gray-500">
-              <span>{schemaFields.length} fields</span>
-              <span>{pipelineSteps.length} steps</span>
-            </div>
-          </button>
-        );
-      })}
           </div>
         </div>
       </div>

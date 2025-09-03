@@ -1,0 +1,6 @@
+{
+  "filename": "harvest_test_fixed.txt",
+  "mime_type": "text/plain",
+  "content": "HARVEST LOAD SHEET\n\nDate: 09/02/2025\nField: North Field A\nAcres: 25.5\nShift: 1\nShake: 3\n\nLOAD TABLE:\nLoad# | Ticket# | Front Trailer | Back Trailer | Time\n001   | T-12345 | FT-101       | BT-201       | 08:30\n002   | T-12346 | FT-102       | BT-202       | 09:15\n003   | T-12347 | FT-103       | BT-203       | 10:00\n\nSupervisor: John Smith\nTotal Loads: 3",
+  "custom_doc_type_name": "Harvest Load Sheet"
+}

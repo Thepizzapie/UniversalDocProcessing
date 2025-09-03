@@ -127,7 +127,7 @@ class DocumentProcessingCrew:
 
         return results
 
-    def extract_data(self, document_text: str, document_type: str = "invoice", expected_fields: list[str] | None = None) -> ExtractedRecord:
+    def extract_data(self, document_text: str, document_type: str = "invoice", expected_fields: list[str] | None = None, extraction_context: dict | None = None) -> ExtractedRecord:
         """Extract structured data from document text."""
         return self.extraction_agent.extract_fields(document_text, document_type, expected_fields)
 
