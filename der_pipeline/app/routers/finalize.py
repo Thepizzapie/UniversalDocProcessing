@@ -13,6 +13,7 @@ from ..utils.validation import validate_extracted_fields
 router = APIRouter()
 
 
+@router.post("/finalize/{document_id}")
 @requires_role("reviewer", "admin")
 async def finalize_document(document_id: int, request: FinalizeRequest, current_user=Depends(get_current_active_user)):
     """Finalize document processing with approval or rejection."""
@@ -28,11 +29,7 @@ async def finalize_document(document_id: int, request: FinalizeRequest, current_
         if not document:
             raise HTTPException(status_code=404, detail=f"Document {document_id} not found")
 
-        if document.state != PipelineState.RECONCILED:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Document {document_id} is not ready for finalization (current state: {document.state.value})",
-            )
+    # Do not hard-block on state here; FinalizeService will decide based on pipeline config
 
     try:
         # Optional: perform a lightweight business validation before finalize
@@ -74,6 +71,7 @@ async def finalize_document(document_id: int, request: FinalizeRequest, current_
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        # If auth dependency fails earlier we won't reach here, but keep message generic otherwise
         raise HTTPException(status_code=500, detail=f"Finalization failed: {str(e)}")
 
 

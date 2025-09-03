@@ -188,6 +188,7 @@ class CustomDocTypeDefinition(SQLModel, table=True):
     instructions: dict[str, Any] = Field(sa_column=Column(JSON))  # prompt / OCR hints
     output_schema: dict[str, Any] = Field(sa_column=Column(JSON))  # desired JSON schema
     destination_webhook: str | None = None
+    pipeline_config: dict[str, Any] = Field(sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

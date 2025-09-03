@@ -3,10 +3,8 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   FileText,
   Upload,
-  Activity,
   Home,
   Database,
-  BookOpen,
   Settings,
   Moon,
   Sun
@@ -16,13 +14,11 @@ const Navbar = ({ darkMode, toggleDarkMode }) => {
   const location = useLocation();
   
   const navigation = [
-    { name: 'Dashboard', href: '/', icon: Home },
+    { name: 'Dashboard', href: '/dashboard', icon: Home },
     { name: 'Process Documents', href: '/upload', icon: Upload },
-    { name: 'RAG Knowledge', href: '/rag-upload', icon: Database },
-    { name: 'Browse References', href: '/rag-manager', icon: BookOpen },
+  { name: 'Recon RAG Knowledgebase', href: '/rag', icon: Database },
     { name: 'Doc Types', href: '/doc-types', icon: FileText },
-    { name: 'Settings', href: '/settings', icon: Settings },
-    { name: 'System Health', href: '/health', icon: Activity },
+  { name: 'Settings', href: '/settings', icon: Settings },
   ];
 
   return (
@@ -32,9 +28,7 @@ const Navbar = ({ darkMode, toggleDarkMode }) => {
           {/* Logo */}
           <Link to="/" className="flex items-center space-x-2">
             <FileText className="h-8 w-8 text-primary" />
-            <span className="text-xl font-bold text-primary">
-              DER.ai
-            </span>
+            <span className="text-xl font-bold text-primary">Parser</span>
           </Link>
 
           {/* Navigation Links */}

@@ -7,7 +7,8 @@ import {
   CheckCircle, 
   XCircle, 
   AlertTriangle,
-  RefreshCw 
+  RefreshCw,
+  Trash2
 } from 'lucide-react';
 import { apiService } from '../services/api';
 
@@ -33,6 +34,19 @@ const Dashboard = () => {
   useEffect(() => {
     fetchDocuments();
   }, []);
+
+  const canDelete = (state) => !['APPROVED', 'REJECTED'].includes(state);
+
+  const onDelete = async (docId) => {
+    const ok = window.confirm('Delete this document? This cannot be undone.');
+    if (!ok) return;
+    try {
+      await apiService.deleteDocument(docId);
+      setDocuments((prev) => prev.filter((d) => d.document_id !== docId));
+    } catch (e) {
+      alert(e?.response?.data?.detail || 'Failed to delete document');
+    }
+  };
 
   const getStateIcon = (state) => {
     switch (state) {
@@ -108,9 +122,7 @@ const Dashboard = () => {
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold text-primary">Dashboard</h1>
-          <p className="mt-2 text-secondary">
-            Monitor your document processing pipeline
-          </p>
+          <p className="mt-2 text-secondary">Monitor your document processing pipeline</p>
         </div>
         
         <div className="flex space-x-4">
@@ -200,7 +212,7 @@ const Dashboard = () => {
             <FileText className="mx-auto h-12 w-12 text-muted" />
             <h3 className="mt-4 text-lg font-medium text-primary">No documents yet</h3>
             <p className="mt-2 text-secondary">
-              Get started by processing your first document through the DER pipeline.
+              Get started by processing your first document through the Parser pipeline.
             </p>
             <Link to="/upload" className="btn btn-primary mt-4">
               <Plus className="h-4 w-4 mr-2" />
@@ -260,12 +272,23 @@ const Dashboard = () => {
                       {formatDate(doc.uploaded_at)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <Link
-                        to={`/document/${doc.document_id}`}
-                        className="text-secondary hover:text-primary transition-colors"
-                      >
-                        View Details
-                      </Link>
+                      <div className="flex items-center gap-4">
+                        <Link
+                          to={`/document/${doc.document_id}`}
+                          className="text-secondary hover:text-primary transition-colors"
+                        >
+                          View Details
+                        </Link>
+                        {canDelete(doc.state) && (
+                          <button
+                            onClick={() => onDelete(doc.document_id)}
+                            className="text-red-600 hover:text-red-500 flex items-center"
+                            title="Delete document"
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" /> Delete
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

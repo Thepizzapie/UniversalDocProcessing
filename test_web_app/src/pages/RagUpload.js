@@ -1,3 +1,4 @@
+// DEPRECATED: merged into Rag.js page.
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Database, Upload, FileText, Plus, Save, Trash2 } from 'lucide-react';

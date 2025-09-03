@@ -66,6 +66,7 @@ def log_audit_event(
     actor_type: ActorType = ActorType.SYSTEM,
     actor_id: str | None = None,
     payload: dict[str, Any] | None = None,
+    session: Session | None = None,
 ) -> AuditTrail:
     """Convenience function to log audit events."""
     return AuditService.log(
@@ -75,5 +76,6 @@ def log_audit_event(
         to_state=to_state,
         actor_type=actor_type,
         actor_id=actor_id,
-        payload=payload,
+    payload=payload,
+    session=session,
     )

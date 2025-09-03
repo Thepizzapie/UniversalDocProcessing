@@ -62,3 +62,36 @@ class WebhookDispatchService:
         except RetryError as exc:
             logger.error(f"Failed to dispatch webhook after retries: {exc}")
             raise
+
+    @classmethod
+    def dispatch_document_with_custom(cls, document_id: int, custom_name: str | None):
+        """Dispatch using webhook from a given custom doc-type name (if configured)."""
+        if not custom_name:
+            return cls.dispatch_document(document_id)
+        with get_session_sync() as session:
+            doc = session.get(Document, document_id)
+            if not doc:
+                raise ValueError(f"Document {document_id} not found")
+            doc_type_def = (
+                session.query(CustomDocTypeDefinition)
+                .filter(CustomDocTypeDefinition.tenant_id == doc.tenant_id)
+                .filter(CustomDocTypeDefinition.name == custom_name)
+                .first()
+            )
+            if not doc_type_def or not doc_type_def.destination_webhook:
+                logger.warning(
+                    f"No webhook configured for document {document_id} for custom '{custom_name}'"
+                )
+                return
+            payload = {
+                "document_id": doc.id,
+                "document_type": custom_name,
+                "state": doc.state.value,
+                "data": doc.content,
+            }
+        try:
+            cls._post(doc_type_def.destination_webhook, payload)
+            logger.info(f"Webhook dispatch success for document {document_id} using custom '{custom_name}'")
+        except RetryError as exc:
+            logger.error(f"Failed to dispatch webhook after retries: {exc}")
+            raise

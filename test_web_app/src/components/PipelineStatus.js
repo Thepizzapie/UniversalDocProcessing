@@ -10,8 +10,9 @@ import {
   AlertTriangle
 } from 'lucide-react';
 
-const PipelineStatus = ({ currentState, document }) => {
-  const steps = [
+const PipelineStatus = ({ currentState, document, configuredStepTypes = [] }) => {
+  // Master list of all possible steps in canonical order
+  const allSteps = [
     {
       id: 'INGESTED',
       name: 'Ingested',
@@ -67,6 +68,51 @@ const PipelineStatus = ({ currentState, document }) => {
       description: 'Processing rejected'
     }
   ];
+
+  // Map pipeline step types to which PipelineState IDs we should show
+  const stepVisibility = {
+    hil: ['HIL_REQUIRED', 'HIL_CONFIRMED'],
+    fetch: ['FETCH_PENDING', 'FETCHED'],
+    reconcile: ['RECONCILED'],
+    send: ['FINAL_REVIEW', 'APPROVED', 'REJECTED'],
+    extraction: ['INGESTED'], // always shown
+  };
+
+  // Determine if we're in a custom-driven flow from extraction meta
+  const extractionMeta = document?.latest_extraction || {};
+  const modeMeta = extractionMeta?._extraction_mode?.value || extractionMeta?._extraction_mode;
+  const nameMeta = extractionMeta?._custom_doc_type_name?.value || extractionMeta?._custom_doc_type_name;
+  const isCustomFlow = (modeMeta || '').toString().toLowerCase().includes('custom') || !!nameMeta;
+
+  // Prefer configured step types; if missing and custom flow, default to minimal ['hil','send']
+  let effectiveStepTypes = configuredStepTypes || [];
+  console.log('PipelineStatus: Received configuredStepTypes:', configuredStepTypes);
+  console.log('PipelineStatus: Is custom flow:', isCustomFlow);
+  console.log('PipelineStatus: Current state:', currentState);
+
+  if ((!effectiveStepTypes || effectiveStepTypes.length === 0) && isCustomFlow) {
+    console.log('PipelineStatus: Using default step types for custom flow');
+    effectiveStepTypes = ['hil', 'send'];
+  }
+  const stepTypesSet = new Set((effectiveStepTypes || []).map(s => s?.toLowerCase()));
+  console.log('PipelineStatus: Effective step types:', effectiveStepTypes);
+  console.log('PipelineStatus: Step types set:', Array.from(stepTypesSet));
+
+  // Build the list of steps to render based on configured step types
+  const shouldInclude = (stepId) => {
+    if (stepId === 'INGESTED') return true; // always include
+    if (!stepTypesSet.size) return true; // legacy/generic
+    if (stepId === currentState) return true; // always show current
+    for (const [type, ids] of Object.entries(stepVisibility)) {
+      if (ids.includes(stepId)) return stepTypesSet.has(type);
+    }
+    return true;
+  };
+
+  // If simple pipeline (extraction + hil + send), constrain steps to a compact sequence
+  const isSimple = stepTypesSet.size && !stepTypesSet.has('fetch') && !stepTypesSet.has('reconcile');
+  const simpleOrder = ['INGESTED', 'HIL_REQUIRED', 'HIL_CONFIRMED', 'FINAL_REVIEW', 'APPROVED', 'REJECTED'];
+  const steps = (isSimple ? allSteps.filter(s => simpleOrder.includes(s.id)) : allSteps).filter(s => shouldInclude(s.id));
 
   const getStepStatus = (stepId) => {
     const stepIndex = steps.findIndex(s => s.id === stepId);

@@ -9,1650 +9,959 @@ import {
   XCircle,
   Save,
   Play,
-  Eye,
   Tag,
   Settings,
-  Edit3,
   FileText,
   Image,
   AlertCircle,
   Check,
   X,
   Plus,
-  Copy
+  Eye,
+  Wand2,
+  Clock,
+  Database,
+  ArrowLeft,
+  Edit,
+  Package
 } from 'lucide-react';
 import { apiService } from '../services/api';
-import PipelineStatus from '../components/PipelineStatus';
-import DebugPanel from '../components/DebugPanel';
-import RagManager from '../components/RagManager';
 
-// Enhanced Extracted Data Field Component - UNUSED
-/*
-const ExtractedDataField = ({ field, data, isEditing, onEdit, onSave, onCancel }) => {
-  const [editValue, setEditValue] = useState(data.value);
-  
-  const getConfidenceColor = (confidence) => {
-    if (confidence >= 0.9) return 'text-green-600 bg-green-50';
-    if (confidence >= 0.7) return 'text-yellow-600 bg-yellow-50';
-    return 'text-red-600 bg-red-50';
-  };
+// ===== UTILITY COMPONENTS =====
 
-  const formatValue = (value) => {
-    if (typeof value === 'object') {
-      return JSON.stringify(value, null, 2);
+const StatusBadge = ({ status, children }) => {
+  const getStatusColor = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'approved': return 'bg-green-100 text-green-800 border-green-200';
+      case 'rejected': return 'bg-red-100 text-red-800 border-red-200';
+      case 'hil_required': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'ingested': return 'bg-blue-100 text-blue-800 border-blue-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
-    return String(value);
-  };
-
-  const handleSave = () => {
-    // Here you would typically save the edited value
-    console.log('Saving:', field, editValue);
-    onSave();
   };
 
   return (
-    <div className="border border-gray-200 dark:border-slate-600 rounded-lg p-4 hover:shadow-sm transition-shadow">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center space-x-2">
-          <label className="font-medium text-gray-900 dark:text-white">{field}</label>
-          {data.type_hint && (
-            <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full">
-              {data.type_hint}
+    <span className={`px-2 py-1 text-xs font-medium rounded-full border ${getStatusColor(status)}`}>
+      {children || status}
             </span>
-          )}
-        </div>
-        <div className="flex items-center space-x-2">
-          {data.confidence && (
-            <span className={`text-xs px-2 py-1 rounded-full ${getConfidenceColor(data.confidence)}`}>
-              {(data.confidence * 100).toFixed(1)}%
-            </span>
-          )}
-          {!isEditing && (
-            <button
-              onClick={onEdit}
-              className="text-gray-400 hover:text-blue-600 transition-colors"
-              title="Edit field"
-            >
-              <Edit3 className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-      </div>
-      
-      {isEditing ? (
-        <div className="space-y-3">
-          {typeof data.value === 'object' ? (
-            <textarea
-              value={editValue}
-              onChange={(e) => setEditValue(e.target.value)}
-              className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded-md font-mono text-sm h-32"
-              placeholder="Enter JSON..."
-            />
-          ) : (
-            <input
-              type="text"
-              value={editValue}
-              onChange={(e) => setEditValue(e.target.value)}
-              className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded-md"
-            />
-          )}
-          <div className="flex justify-end space-x-2">
-            <button
-              onClick={onCancel}
-              className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-            >
-              Save
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="text-sm text-gray-700 dark:text-gray-300">
-          {typeof data.value === 'object' ? (
-            <pre className="bg-gray-50 dark:bg-slate-800 p-2 rounded text-xs overflow-auto max-h-32">
-              {formatValue(data.value)}
-            </pre>
-          ) : (
-            <div className="p-2 bg-gray-50 dark:bg-slate-800 rounded min-h-[2rem] flex items-center">
-              {formatValue(data.value) || <span className="text-gray-400 italic">No value</span>}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
   );
 };
-*/
 
-// Smart Field Editor Component - User-friendly dynamic editor
-const SmartFieldEditor = ({ field, data, onUpdate }) => {
-  const [editValue, setEditValue] = useState(data.value || '');
-  const [correctionReason, setCorrectionReason] = useState(data.correction_reason || '');
-  const [showReason, setShowReason] = useState(!!data.correction_reason);
-  const [isModified, setIsModified] = useState(false);
-  
-  const getConfidenceColor = (confidence) => {
-    if (confidence >= 0.9) return 'border-green-300 bg-green-50 dark:bg-green-900/20';
-    if (confidence >= 0.7) return 'border-yellow-300 bg-yellow-50 dark:bg-yellow-900/20';
-    return 'border-red-300 bg-red-50 dark:bg-red-900/20';
-  };
-
-     const getFieldIcon = (type, value, fieldName) => {
-     // No icons - return empty string
-     return '';
-   };
-
-  const detectInputType = (type, value, fieldName) => {
-    const lowerField = fieldName.toLowerCase();
-    const stringValue = String(value || '').toLowerCase();
-    
-    if (type === 'number' || typeof value === 'number') return 'number';
-    if (type === 'email' || stringValue.includes('@')) return 'email';
-    if (type === 'date' || stringValue.match(/\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2}/)) return 'date';
-    if (lowerField.includes('phone') || lowerField.includes('tel')) return 'tel';
-    if (lowerField.includes('url') || lowerField.includes('website')) return 'url';
-    if (stringValue.length > 100) return 'textarea';
-    return 'text';
-  };
-
-  const handleValueChange = (newValue) => {
-    setEditValue(newValue);
-    setIsModified(newValue !== data.value);
-  };
-
-  const handleSave = () => {
-    onUpdate({
-      value: editValue,
-      confidence: data.confidence,
-      type_hint: data.type_hint,
-      correction_reason: correctionReason || (isModified ? 'Manual correction' : null)
-    });
-    setIsModified(false);
-  };
-
-  const handleReset = () => {
-    setEditValue(data.value || '');
-    setCorrectionReason(data.correction_reason || '');
-    setIsModified(false);
-  };
-
-  const inputType = detectInputType(data.type_hint, data.value, field);
-  const fieldIcon = getFieldIcon(data.type_hint, data.value, field);
-  
-  // Generate user-friendly field label
-  const getFieldLabel = (fieldName) => {
-    return fieldName
-      .split('.')
-      .map(part => part.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1'))
-      .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-      .join(' → ');
+const ConfidenceIndicator = ({ confidence }) => {
+  const percentage = Math.round((confidence || 0) * 100);
+  const getColor = (conf) => {
+    if (conf >= 0.9) return 'bg-green-500';
+    if (conf >= 0.7) return 'bg-yellow-500';
+    return 'bg-red-500';
   };
 
   return (
-    <div className={`border rounded-lg p-4 transition-all duration-200 ${getConfidenceColor(data.confidence)} ${isModified ? 'ring-2 ring-blue-400' : ''}`}>
-      {/* Compact Field Header */}
-      <div className="flex items-center justify-between mb-3">
                  <div className="flex items-center space-x-2">
-           {fieldIcon && <span className="text-lg">{fieldIcon}</span>}
-           <div className="flex-1">
-            <label className="font-medium text-gray-900 dark:text-white text-sm">
-              {getFieldLabel(field)}
-            </label>
-            <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center space-x-2">
-              {data.schema_definition?.description && (
-                <span className="italic">{data.schema_definition.description}</span>
-              )}
-              <span>Type: {data.type_hint || 'string'}</span>
-              {data.schema_definition?.required && (
-                <span className="text-red-500">*required</span>
-              )}
+      <div className="w-16 bg-gray-200 rounded-full h-2">
+        <div
+          className={`h-2 rounded-full ${getColor(confidence)} transition-all duration-300`}
+          style={{ width: `${percentage}%` }}
+        />
             </div>
-          </div>
-        </div>
-        
-        <div className="flex items-center space-x-2">
-          {data.confidence && (
-            <div className={`text-xs px-2 py-1 rounded font-medium ${
-              data.confidence >= 0.9 ? 'bg-green-100 text-green-700' :
-              data.confidence >= 0.7 ? 'bg-yellow-100 text-yellow-700' :
-              'bg-red-100 text-red-700'
-            }`}>
-              {(data.confidence * 100).toFixed(0)}%
-            </div>
-          )}
-          
-          {isModified && (
-            <span className="text-xs px-2 py-1 bg-orange-100 text-orange-700 rounded flex items-center">
-              <AlertCircle className="h-3 w-3 mr-1" />
-              Modified
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        <div className="relative">
-          {data.type_hint === 'boolean' ? (
-            <div className="flex items-center space-x-2 p-3">
-              <input
-                type="checkbox"
-                checked={editValue === true || editValue === 'true'}
-                onChange={(e) => handleValueChange(e.target.checked)}
-                className="w-4 h-4 text-blue-600 border border-gray-300 rounded focus:ring-blue-500"
-              />
-              <label className="text-sm text-gray-700 dark:text-gray-300">
-                {editValue === true || editValue === 'true' ? 'Yes' : 'No'}
-              </label>
-            </div>
-          ) : data.type_hint === 'array' ? (
-            <textarea
-              value={Array.isArray(editValue) ? editValue.join('\n') : editValue}
-              onChange={(e) => handleValueChange(e.target.value.split('\n').filter(item => item.trim()))}
-              className="w-full p-3 border border-gray-200 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm"
-              placeholder={`Enter each item on a new line...`}
-              rows={3}
-            />
-          ) : inputType === 'textarea' ? (
-            <textarea
-              value={editValue}
-              onChange={(e) => handleValueChange(e.target.value)}
-              className="w-full p-3 border border-gray-200 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm"
-              placeholder={`Enter ${getFieldLabel(field).toLowerCase()}...`}
-              rows={3}
-            />
-          ) : inputType === 'number' ? (
-            <input
-              type="number"
-              value={editValue}
-              onChange={(e) => handleValueChange(e.target.value)}
-              className="w-full p-3 border border-gray-200 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm"
-              placeholder={`Enter ${getFieldLabel(field).toLowerCase()}...`}
-              step="0.01"
-            />
-          ) : (
-            <input
-              type={inputType}
-              value={editValue}
-              onChange={(e) => handleValueChange(e.target.value)}
-              className="w-full p-3 border border-gray-200 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm"
-              placeholder={`Enter ${getFieldLabel(field).toLowerCase()}...`}
-            />
-          )}
-          
-          {inputType === 'email' && editValue && !editValue.includes('@') && (
-            <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-red-500">
-              <AlertCircle className="h-5 w-5" />
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center justify-between pt-3 border-t">
-          <button
-            onClick={() => setShowReason(!showReason)}
-            className="text-xs text-gray-600 hover:text-gray-800 transition-colors flex items-center"
-          >
-            {showReason ? 'Hide' : 'Add'} notes
-            <span className="ml-1">{showReason ? '▼' : '▶'}</span>
-          </button>
-          
-          <div className="flex space-x-2">
-            {isModified && (
-              <button
-                onClick={handleReset}
-                className="px-2 py-1 text-xs text-gray-600 hover:text-gray-800 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
-              >
-                Reset
-              </button>
-            )}
-            <button
-              onClick={handleSave}
-              disabled={!isModified}
-              className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center"
-            >
-              <Check className="h-3 w-3 mr-1" />
-              {isModified ? 'Save' : 'Saved'}
-            </button>
-          </div>
-        </div>
-        
-        {showReason && (
-          <textarea
-            value={correctionReason}
-            onChange={(e) => setCorrectionReason(e.target.value)}
-            className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded text-xs h-12 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="Why was this field corrected? (optional)"
-          />
-        )}
-
-        {data.correction_reason && (
-          <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border-l-4 border-blue-400">
-            <div className="text-sm text-blue-800 dark:text-blue-300">
-              <strong>Previous correction:</strong> {data.correction_reason}
-            </div>
-          </div>
-        )}
-      </div>
+      <span className="text-xs text-gray-500">{percentage}%</span>
     </div>
   );
 };
 
-// HIL Editable Field Component - UNUSED
-/*
-const HilEditableField = ({ field, data, onUpdate }) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editValue, setEditValue] = useState(data.value || '');
-  const [correctionReason, setCorrectionReason] = useState(data.correction_reason || '');
-  const [showReason, setShowReason] = useState(false);
-  
-  const getConfidenceColor = (confidence) => {
-    if (confidence >= 0.9) return 'border-green-200 bg-green-50 dark:bg-green-900/20';
-    if (confidence >= 0.7) return 'border-yellow-200 bg-yellow-50 dark:bg-yellow-900/20';
-    return 'border-red-200 bg-red-50 dark:bg-red-900/20';
-  };
-
-  const handleSave = () => {
-    onUpdate({
-      value: editValue,
-      confidence: data.confidence,
-      type_hint: data.type_hint,
-      correction_reason: correctionReason || 'Manual correction'
-    });
-    setIsEditing(false);
-    setShowReason(false);
-  };
-
-  const handleCancel = () => {
-    setEditValue(data.value || '');
-    setCorrectionReason(data.correction_reason || '');
-    setIsEditing(false);
-    setShowReason(false);
-  };
-
-  const isModified = editValue !== data.value;
-
-  return (
-    <div className={`border-2 rounded-lg p-4 transition-all ${getConfidenceColor(data.confidence)} ${isModified ? 'ring-2 ring-blue-200' : ''}`}>
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center space-x-3">
-          <label className="font-semibold text-gray-900 dark:text-white">{field}</label>
-          {data.type_hint && (
-            <span className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full">
-              {data.type_hint}
-            </span>
-          )}
-          {isModified && (
-            <span className="text-xs px-2 py-1 bg-orange-100 text-orange-700 rounded-full flex items-center">
-              <AlertCircle className="h-3 w-3 mr-1" />
-              Modified
-            </span>
-          )}
-        </div>
-        
-        <div className="flex items-center space-x-2">
-          {data.confidence && (
-            <div className="text-xs text-gray-600 dark:text-gray-400">
-              Confidence: <span className="font-medium">{(data.confidence * 100).toFixed(1)}%</span>
-            </div>
-          )}
-          
-          <div className="flex space-x-1">
-            {!isEditing ? (
-              <>
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
-                  title="Edit field"
-                >
-                  <Edit3 className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(String(data.value));
-                  }}
-                  className="p-1 text-gray-400 hover:text-green-600 transition-colors"
-                  title="Copy value"
-                >
-                  <Copy className="h-4 w-4" />
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={handleSave}
-                  className="p-1 text-green-600 hover:text-green-700 transition-colors"
-                  title="Save changes"
-                >
-                  <Check className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={handleCancel}
-                  className="p-1 text-red-600 hover:text-red-700 transition-colors"
-                  title="Cancel changes"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-      
-      {isEditing ? (
-        <div className="space-y-3">
-          {typeof data.value === 'object' ? (
-            <textarea
-              value={editValue}
-              onChange={(e) => setEditValue(e.target.value)}
-              className="w-full p-3 border border-gray-300 dark:border-slate-600 rounded-md font-mono text-sm h-32 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Enter JSON object..."
-            />
-          ) : (
-            <input
-              type="text"
-              value={editValue}
-              onChange={(e) => setEditValue(e.target.value)}
-              className="w-full p-3 border border-gray-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Enter value..."
-            />
-          )}
-          
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => setShowReason(!showReason)}
-              className="text-sm text-gray-600 hover:text-gray-800 transition-colors"
-            >
-              {showReason ? 'Hide' : 'Add'} correction reason
-            </button>
-          </div>
-          
-          {showReason && (
-            <textarea
-              value={correctionReason}
-              onChange={(e) => setCorrectionReason(e.target.value)}
-              className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded-md text-sm h-20"
-              placeholder="Why was this field corrected? (optional)"
-            />
-          )}
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <div className="text-sm text-gray-700 dark:text-gray-300">
-            {typeof data.value === 'object' ? (
-              <pre className="bg-white dark:bg-slate-800 p-3 rounded border text-xs overflow-auto max-h-32">
-                {JSON.stringify(data.value, null, 2)}
-              </pre>
-            ) : (
-              <div className="p-3 bg-white dark:bg-slate-800 rounded border min-h-[2.5rem] flex items-center">
-                {String(data.value) || <span className="text-gray-400 italic">No value</span>}
-              </div>
-            )}
-          </div>
-          
-          {data.correction_reason && (
-            <div className="text-xs text-gray-600 dark:text-gray-400 bg-blue-50 dark:bg-blue-900/20 p-2 rounded">
-              <strong>Correction reason:</strong> {data.correction_reason}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
-*/
+// ===== MAIN COMPONENT =====
 
 const DocumentDetail = () => {
   const { id } = useParams();
+
+  // ===== STATE =====
   const [document, setDocument] = useState(null);
+  const [customDocType, setCustomDocType] = useState(null);
+  const [extractionData, setExtractionData] = useState(null);
+  const [hilData, setHilData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState('status');
-  
-  // HIL state
-  const [hilData, setHilData] = useState(null);
-  const [corrections, setCorrections] = useState({});
-  const [hilLoading, setHilLoading] = useState(false);
-  // const [editingField, setEditingField] = useState(null); // Unused
-  const [showRawData, setShowRawData] = useState(false);
-  
-  // Document type schema state
-  const [documentTypes, setDocumentTypes] = useState([]);
-  const [currentDocTypeSchema, setCurrentDocTypeSchema] = useState(null);
-  const [isLoadingDocTypes, setIsLoadingDocTypes] = useState(false);
-  
-  // Fetch state
-  const [fetchTargets, setFetchTargets] = useState(['example_vendor']);
-  const [fetchLoading, setFetchLoading] = useState(false);
-  
-  // Reconcile state
-  const [reconcileStrategy, setReconcileStrategy] = useState('LOOSE');
-  const [reconcileResult, setReconcileResult] = useState(null);
-  const [reconcileLoading, setReconcileLoading] = useState(false);
-  
-  // Finalize state
-  const [finalizeDecision, setFinalizeDecision] = useState('APPROVED');
-  const [finalizeNotes, setFinalizeNotes] = useState('');
-  const [finalizeLoading, setFinalizeLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
+  const [submittingHil, setSubmittingHil] = useState(false);
+  const [message, setMessage] = useState('');
+  // HIL editor (overview-but-editable)
+  const [hilEdits, setHilEdits] = useState({});
+  const [hilNotes, setHilNotes] = useState('');
+  const [savingHil, setSavingHil] = useState(false);
 
-  const fetchDocument = async () => {
+  // ===== HIL SAVE/APPROVAL FUNCTIONS =====
+  const saveHilCorrections = async () => {
+    if (!document?.latest_extraction) return;
+    setSavingHil(true);
+    try {
+      const corrections = {};
+      for (const [field, val] of Object.entries(hilEdits || {})) {
+        corrections[field] = val;
+      }
+      await apiService.updateHilCorrections(id, { corrections, reviewer: 'user', notes: hilNotes || '' });
+      await loadDocument();
+      setMessage('Corrections saved');
+    } catch (e) {
+      setError(`Failed to save corrections: ${e.message}`);
+    } finally {
+      setSavingHil(false);
+    }
+  };
+
+  const submitHilReview = async (decision) => {
+    setSubmittingHil(true);
+    try {
+      if (Object.keys(hilEdits || {}).length > 0) {
+        await saveHilCorrections();
+      }
+      await apiService.submitHilReview(id, {
+        document_id: id,
+        decision: decision === 'approve' ? 'APPROVED' : 'REJECTED',
+        field_reviews: [],
+        overall_comments: hilNotes || ''
+      });
+      await loadDocument();
+      setMessage(`✅ Document ${decision === 'approve' ? 'approved' : 'rejected'} successfully`);
+    } catch (err) {
+      setError(`Failed to submit HIL review: ${err.message}`);
+    } finally {
+      setSubmittingHil(false);
+    }
+  };
+
+  // ===== EFFECTS =====
+  useEffect(() => {
+    if (id) {
+      loadDocument();
+    }
+  }, [id]);
+
+  // Initialize simple hilEdits mirror of latest_extraction when in HIL
+  useEffect(() => {
+    if (document?.state === 'HIL_REQUIRED' && document.latest_extraction) {
+      const initial = {};
+      Object.entries(document.latest_extraction)
+        .filter(([k]) => !k.startsWith('_'))
+        .forEach(([k, fd]) => { initial[k] = fd?.value; });
+      setHilEdits(initial);
+    }
+  }, [document?.state, document?.latest_extraction]);
+
+  // ===== API FUNCTIONS =====
+  const loadDocument = async () => {
     try {
       setLoading(true);
-      const response = await apiService.getDocumentReport(id);
-      setDocument(response.data);
       setError('');
+
+      // Load document report
+      const reportResponse = await apiService.getDocumentReport(id);
+      const documentData = reportResponse.data;
+      setDocument(documentData);
+
+      console.log('DocumentDetail: Loaded document:', documentData);
+
+      // Load custom document type if specified
+      if (documentData.pipeline_custom_doc_type_name) {
+        try {
+          const customTypesResponse = await apiService.getCustomDocTypes();
+          const customTypes = customTypesResponse.data || [];
+          const matchedType = customTypes.find(ct =>
+            ct.name.toLowerCase() === documentData.pipeline_custom_doc_type_name.toLowerCase()
+          );
+
+          if (matchedType) {
+            setCustomDocType(matchedType);
+            console.log('DocumentDetail: Loaded custom doc type:', matchedType);
+          } else {
+            console.warn('DocumentDetail: Custom doc type not found:', documentData.pipeline_custom_doc_type_name);
+          }
+    } catch (err) {
+          console.error('Failed to load custom doc types:', err);
+        }
+      }
+
+      // Load HIL data if needed
+      if (documentData.state === 'HIL_REQUIRED') {
+        try {
+          const hilResponse = await apiService.getHilData(id);
+          setHilData(hilResponse.data);
+    } catch (err) {
+          console.error('Failed to load HIL data:', err);
+        }
+      }
+
     } catch (err) {
       setError('Failed to load document');
-      console.error(err);
+      console.error('DocumentDetail: Error loading document:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const loadDocumentTypes = async () => {
-    if (isLoadingDocTypes) return; // Prevent multiple calls
-    
-    try {
-      setIsLoadingDocTypes(true);
-      const response = await apiService.getDocTypes();
-      setDocumentTypes(response.data || []);
-    } catch (err) {
-      console.error('Failed to load document types:', err);
-      setDocumentTypes([]);
-    } finally {
-      setIsLoadingDocTypes(false);
-    }
-  };
+  // ===== RENDER FUNCTIONS =====
 
-  // Helper function to flatten nested objects into dot-notation keys
-  const flattenObject = (obj, prefix = '') => {
-    const flattened = {};
-    for (const [key, value] of Object.entries(obj)) {
-      const newKey = prefix ? `${prefix}.${key}` : key;
-      if (value && typeof value === 'object' && !Array.isArray(value)) {
-        Object.assign(flattened, flattenObject(value, newKey));
-      } else {
-        flattened[newKey] = value;
-      }
-    }
-    return flattened;
-  };
+  const renderOverviewTab = () => {
+    if (!document) return null;
 
-  // Helper function to get value from nested object using dot notation
-  const getNestedValue = (obj, path) => {
-    return path.split('.').reduce((current, key) => current?.[key], obj);
-  };
+    return (
+      <div className="space-y-6">
+        {/* Document Info */}
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-600 p-6">
+          <div className="flex items-center space-x-3 mb-4">
+            <FileText className="h-6 w-6 text-blue-600" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Document Information</h3>
+      </div>
 
-  // Generate corrections based on document type schema
-  const generateSchemaBasedCorrections = (extractedData, schema) => {
-    const corrections = {};
-    
-    if (!schema) return corrections;
-    
-    // Flatten the extracted data
-    // const flatExtracted = flattenObject(extractedData); // Unused
-    
-    // Process each field in the schema
-    const processSchemaField = (fieldName, fieldDef, prefix = '') => {
-      const fullFieldName = prefix ? `${prefix}.${fieldName}` : fieldName;
-      
-      if (fieldDef.type === 'object' && fieldDef.properties) {
-        // Process nested object properties
-        Object.entries(fieldDef.properties).forEach(([nestedName, nestedDef]) => {
-          processSchemaField(nestedName, nestedDef, fullFieldName);
-        });
-      } else if (fieldDef.type === 'array') {
-        // For arrays, create a single field that represents the array
-        const extractedValue = getNestedValue(extractedData, fullFieldName);
-        corrections[fullFieldName] = {
-          value: extractedValue || [],
-          confidence: 0.8, // Default confidence for schema fields
-          type_hint: fieldDef.type,
-          schema_definition: fieldDef,
-            correction_reason: null
-          };
-      } else {
-        // Simple field
-        const extractedValue = getNestedValue(extractedData, fullFieldName);
-        corrections[fullFieldName] = {
-          value: extractedValue || '',
-          confidence: 0.8, // Default confidence for schema fields
-          type_hint: fieldDef.type,
-          schema_definition: fieldDef,
-          correction_reason: null
-        };
-      }
-    };
-    
-    Object.entries(schema).forEach(([fieldName, fieldDef]) => {
-      processSchemaField(fieldName, fieldDef);
-    });
-    
-    return corrections;
-  };
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h4 className="font-medium text-gray-700 dark:text-slate-300 mb-2">Basic Details</h4>
+              <dl className="space-y-2">
+                <div className="flex justify-between">
+                  <dt className="text-sm text-gray-500">Filename:</dt>
+                  <dd className="text-sm font-medium text-gray-900 dark:text-white">{document.filename}</dd>
+      </div>
+                <div className="flex justify-between">
+                  <dt className="text-sm text-gray-500">Type:</dt>
+                  <dd className="text-sm font-medium text-gray-900 dark:text-white">{document.mime_type}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-sm text-gray-500">Size:</dt>
+                  <dd className="text-sm font-medium text-gray-900 dark:text-white">
+                    {document.content ? `${(document.content.length / 1024).toFixed(1)} KB` : 'N/A'}
+                  </dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-sm text-gray-500">Status:</dt>
+                  <dd><StatusBadge status={document.state}>{document.state}</StatusBadge></dd>
+                </div>
+              </dl>
+            </div>
 
-  const fetchHilData = async () => {
-    try {
-      const response = await apiService.getHilData(id);
-      setHilData(response?.data || null);
-      
-      // Get the document type schema
-      const docType = documentTypes.find(dt => dt.name === document?.document_type);
-      const schema = docType?.output_schema;
-      setCurrentDocTypeSchema(schema);
-      
-      console.log('Document Type:', document?.document_type);
-      console.log('Available Document Types:', documentTypes.map(dt => dt.name));
-      console.log('Found Schema:', schema);
-      
-      // ONLY use schema-based approach - create editable fields from schema only
-      if (schema && Object.keys(schema).length > 0) {
-        const extractedData = response?.data?.extracted_full || response?.data?.extracted || document?.latest_extraction || {};
-        const schemaCorrections = generateSchemaBasedCorrections(extractedData, schema);
-        console.log('Schema-based corrections created:', schemaCorrections);
-        setCorrections(schemaCorrections);
-      } else {
-        console.log('No schema available for document type:', document?.document_type);
-        console.log('Available document types:', documentTypes);
-        setCorrections({});
-      }
-    } catch (err) {
-      console.error('Failed to fetch HIL data:', err);
-      
-      // Don't retry on auth errors to prevent spam
-      if (err.response?.status === 403) {
-        console.error('Authentication required for HIL endpoint');
-        setHilData(null);
-        setCorrections({});
-        return;
-      }
-      
-      // Fallback: try to create schema-based corrections from document data
-      if (document?.latest_extraction) {
-        const docType = documentTypes.find(dt => dt.name === document?.document_type);
-        const schema = docType?.output_schema;
+        <div>
+              <h4 className="font-medium text-gray-700 dark:text-slate-300 mb-2">Processing Info</h4>
+              <dl className="space-y-2">
+                <div className="flex justify-between">
+                  <dt className="text-sm text-gray-500">Uploaded:</dt>
+                  <dd className="text-sm font-medium text-gray-900 dark:text-white">
+                    {new Date(document.uploaded_at).toLocaleString()}
+                  </dd>
+                </div>
+                {document.pipeline_custom_doc_type_name && (
+                  <div className="flex justify-between">
+                    <dt className="text-sm text-gray-500">Custom Type:</dt>
+                    <dd className="text-sm font-medium text-blue-600">{document.pipeline_custom_doc_type_name}</dd>
+              </div>
+            )}
+                {document.pipeline_step_types && (
+                  <div className="flex justify-between">
+                    <dt className="text-sm text-gray-500">Pipeline:</dt>
+                    <dd className="text-sm font-medium text-gray-900 dark:text-white">
+                      {document.pipeline_step_types.join(' → ')}
+                    </dd>
+              </div>
+            )}
+              </dl>
+          </div>
+          </div>
+        </div>
         
-        if (schema && Object.keys(schema).length > 0) {
-          const schemaCorrections = generateSchemaBasedCorrections(document.latest_extraction, schema);
-          console.log('Using schema-based fallback corrections:', schemaCorrections);
-          setCorrections(schemaCorrections);
-        } else {
-          console.log('No schema available for fallback');
-          setCorrections({});
-        }
-      } else {
-        setCorrections({});
-      }
-    }
+        {/* Custom Document Type Info */}
+        {customDocType && (
+          <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-600 p-6">
+            <div className="flex items-center space-x-3 mb-4">
+              <Settings className="h-6 w-6 text-purple-600" />
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Custom Document Type</h3>
+      </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h4 className="font-medium text-gray-700 dark:text-slate-300 mb-2">Configuration</h4>
+                <dl className="space-y-2">
+                  <div className="flex justify-between">
+                    <dt className="text-sm text-gray-500">Name:</dt>
+                    <dd className="text-sm font-medium text-gray-900 dark:text-white">{customDocType.name}</dd>
+      </div>
+                  <div className="flex justify-between">
+                    <dt className="text-sm text-gray-500">Description:</dt>
+                    <dd className="text-sm font-medium text-gray-900 dark:text-white">{customDocType.description}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-sm text-gray-500">Fields:</dt>
+                    <dd className="text-sm font-medium text-gray-900 dark:text-white">
+                      {Object.keys(customDocType.output_schema || {}).length}
+                    </dd>
+                  </div>
+                </dl>
+          </div>
+          
+              <div>
+                <h4 className="font-medium text-gray-700 dark:text-slate-300 mb-2">Pipeline Steps</h4>
+                {customDocType.pipeline_config?.steps ? (
+                  <div className="space-y-2">
+                    {customDocType.pipeline_config.steps.map((step, index) => (
+                      <div key={index} className="flex items-center space-x-2">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                        <span className="text-sm text-gray-700 dark:text-slate-300">
+                          {step.name || step.step_type}
+                        </span>
+              </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">No custom pipeline configured</p>
+            )}
+              </div>
+          </div>
+        </div>
+      )}
+
+        {/* Extraction Results */}
+        {document.latest_extraction && (
+          <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-600 p-6">
+            <div className="flex items-center space-x-3 mb-4">
+              <Database className="h-6 w-6 text-green-600" />
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Latest Extraction</h3>
+            </div>
+
+            <div className="space-y-4">
+              {Object.entries(document.latest_extraction)
+                .filter(([key]) => !key.startsWith('_'))
+                .map(([fieldName, fieldData]) => {
+                  const val = fieldData?.value;
+                  const isArray = Array.isArray(val);
+                  const isArrayOfObjects = isArray && val.every((row) => row && typeof row === 'object' && !Array.isArray(row));
+                  const columns = isArrayOfObjects ? Array.from(new Set((val || []).flatMap((r) => Object.keys(r || {})))) : [];
+
+                  return (
+                    <div key={fieldName} className="border border-gray-200 dark:border-slate-600 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-medium text-gray-900 dark:text-white">{fieldName}</h4>
+                          {isArray && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200">{(val || []).length} items</span>
+                          )}
+                        </div>
+                        {fieldData.confidence !== undefined && (
+                          <ConfidenceIndicator confidence={fieldData.confidence} />
+                        )}
+                      </div>
+
+                      {isArrayOfObjects ? (
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full text-sm border border-gray-200 dark:border-slate-600 rounded-md">
+                            <thead className="bg-gray-50 dark:bg-slate-700">
+                              <tr>
+                                {columns.map((col) => (
+                                  <th key={col} className="px-3 py-2 text-left font-medium text-gray-700 dark:text-slate-200 border-b border-gray-200 dark:border-slate-600">{col}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(val || []).map((row, rIdx) => (
+                                <tr key={rIdx} className="odd:bg-white even:bg-gray-50 dark:odd:bg-slate-800 dark:even:bg-slate-700">
+                                  {columns.map((col) => (
+                                    <td key={col} className="px-3 py-2 border-b border-gray-200 dark:border-slate-600">
+                                      <span className="text-sm text-gray-700 dark:text-slate-200">{String(row?.[col] ?? '')}</span>
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : isArray ? (
+                        <ul className="list-disc list-inside text-sm text-gray-700 dark:text-slate-300">
+                          {(val || []).map((item, i) => (
+                            <li key={i}>{String(item ?? '')}</li>
+                          ))}
+                        </ul>
+                      ) : typeof val === 'object' && val !== null ? (
+                        <pre className="text-xs text-gray-700 dark:text-slate-300 bg-gray-50 dark:bg-slate-700 p-3 rounded border border-gray-200 dark:border-slate-600 overflow-auto">{JSON.stringify(val, null, 2)}</pre>
+                      ) : (
+                        <div className="text-sm text-gray-700 dark:text-slate-300">{String(val)}</div>
+                      )}
+
+                      {fieldData.type_hint && (
+                        <div className="mt-2 text-xs text-gray-500">Type: {fieldData.type_hint}</div>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        )}
+      </div>
+    );
   };
 
-  useEffect(() => {
-    if (id) {
-      fetchDocument();
-      loadDocumentTypes();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  const renderPipelineTab = () => {
+    if (!document) return null;
 
-  // Temporarily disabled to prevent retry loops when backend is down
-  // useEffect(() => {
-  //   if (document && document.state === 'HIL_REQUIRED' && documentTypes.length > 0) {
-  //     fetchHilData();
-  //   }
-  // }, [document, documentTypes]);
+    const pipelineSteps = document.pipeline_step_types || [];
+    const totalSteps = pipelineSteps.length;
+    const completedSteps = pipelineSteps.filter(step => getStepCompletionStatus(step)).length;
+    const progressPercentage = totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
 
-  // Temporarily disabled to prevent retry loops when backend is down
-  // useEffect(() => {
-  //   if (document && documentTypes.length > 0 && Object.keys(corrections).length === 0) {
-  //     console.log('Triggering HIL data fetch for document:', document.document_type);
-  //     fetchHilData();
-  //   }
-  // }, [document, documentTypes, corrections]);
+    // Check if this is a dual-package pipeline
+    const isDualPackage = customDocType?.pipeline_config?.objects?.length > 1 ||
+      document.pipeline_custom_doc_type_name?.includes('parent') ||
+      document.pipeline_custom_doc_type_name?.includes('child');
 
-  const handleHilUpdate = async () => {
-    setHilLoading(true);
-    try {
-      await apiService.updateHilCorrections(id, {
-        corrections,
-        reviewer: 'Test User',
-        notes: 'Updated via test UI'
-      });
-      
-      // Refresh document data
-      await fetchDocument();
-      setActiveTab('status');
-    } catch (err) {
-      setError('Failed to update HIL corrections');
-      console.error(err);
-    } finally {
-      setHilLoading(false);
-    }
+    return (
+      <div className="space-y-6">
+        {/* Pipeline Overview */}
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-600 p-6">
+          <div className="flex items-center space-x-3 mb-6">
+            <Play className="h-6 w-6 text-blue-600" />
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Pipeline Progress</h3>
+              {isDualPackage && (
+                <div className="flex items-center mt-1">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                    Dual Package Pipeline
+                  </span>
+                </div>
+              )}
+            </div>
+            <StatusBadge status={document.state}>{document.state}</StatusBadge>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="mb-6">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-sm font-medium text-gray-700 dark:text-slate-300">Overall Progress</span>
+              <span className="text-sm text-gray-500">{completedSteps} of {totalSteps} steps</span>
+            </div>
+            <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-3">
+              <div
+                className="bg-gradient-to-r from-blue-500 to-green-500 h-3 rounded-full transition-all duration-500 ease-out"
+                style={{ width: `${progressPercentage}%` }}
+              />
+            </div>
+            <div className="flex justify-between items-center mt-1">
+              <span className="text-xs text-gray-500">0%</span>
+              <span className="text-xs font-medium text-gray-700 dark:text-slate-300">{Math.round(progressPercentage)}%</span>
+              <span className="text-xs text-gray-500">100%</span>
+            </div>
+          </div>
+
+          {/* Pipeline Steps Summary */}
+          {pipelineSteps.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+              {pipelineSteps.map((step, index) => {
+                const isCompleted = getStepCompletionStatus(step);
+                const isCurrent = getCurrentStepStatus(step);
+                const stepName = getStepName(step);
+
+                return (
+                  <div key={index} className={`p-3 rounded-lg border ${
+                    isCompleted
+                      ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700'
+                      : isCurrent
+                        ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-700'
+                        : 'bg-gray-50 border-gray-200 dark:bg-slate-700 dark:border-slate-600'
+                  }`}>
+                    <div className="flex items-center space-x-2">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                        isCompleted
+                          ? 'bg-green-500 text-white'
+                          : isCurrent
+                            ? 'bg-blue-500 text-white'
+                            : 'bg-gray-300 text-gray-600'
+                      }`}>
+                        {isCompleted ? <Check className="h-3 w-3" /> : index + 1}
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-medium text-sm text-gray-900 dark:text-white">{stepName}</div>
+                        <div className="text-xs text-gray-500">
+                          {isCompleted ? 'Completed' : isCurrent ? 'In Progress' : 'Pending'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Dual Package Info */}
+          {isDualPackage && (
+            <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-4">
+              <h4 className="font-medium text-purple-800 dark:text-purple-200 mb-2">Dual Package Processing</h4>
+              <p className="text-sm text-purple-700 dark:text-purple-300">
+                This document uses a dual-package pipeline with separate parent and child data structures.
+                Both packages will be processed through the HIL review stage for validation.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Detailed Pipeline Timeline */}
+        {pipelineSteps.length > 0 && (
+          <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-600 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">Pipeline Timeline</h3>
+
+            <div className="relative">
+              {/* Timeline Line */}
+              <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-200 dark:bg-slate-600"></div>
+
+              <div className="space-y-8">
+                {pipelineSteps.map((stepType, index) => {
+                  const isCompleted = getStepCompletionStatus(stepType);
+                  const isCurrent = getCurrentStepStatus(stepType);
+                  const stepName = getStepName(stepType);
+                  const stepDescription = getStepDescription(stepType);
+
+                  return (
+                    <div key={index} className="relative flex items-start space-x-4">
+                      {/* Timeline Node */}
+                      <div className={`relative z-10 w-12 h-12 rounded-full flex items-center justify-center border-4 ${
+                        isCompleted
+                          ? 'bg-green-500 border-green-200 text-white'
+                          : isCurrent
+                            ? 'bg-blue-500 border-blue-200 text-white animate-pulse'
+                            : 'bg-gray-300 border-gray-200 text-gray-600'
+                      }`}>
+                        {isCompleted ? (
+                          <Check className="h-5 w-5" />
+                        ) : isCurrent ? (
+                          <Play className="h-4 w-4 ml-0.5" />
+                        ) : (
+                          <span className="text-sm font-medium">{index + 1}</span>
+                        )}
+                      </div>
+
+                      {/* Step Content */}
+                      <div className="flex-1 pb-8">
+                        <div className={`p-4 rounded-lg border ${
+                          isCompleted
+                            ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700'
+                            : isCurrent
+                              ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-700'
+                              : 'bg-gray-50 border-gray-200 dark:bg-slate-700 dark:border-slate-600'
+                        }`}>
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="font-medium text-gray-900 dark:text-white">{stepName}</h4>
+                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                              isCompleted
+                                ? 'bg-green-100 text-green-800'
+                                : isCurrent
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              {isCompleted ? '✓ Completed' : isCurrent ? '⟳ In Progress' : '○ Pending'}
+                            </span>
+                          </div>
+
+                          <p className="text-sm text-gray-600 dark:text-slate-400 mb-3">{stepDescription}</p>
+
+                          {/* Step-specific information */}
+                          {stepType === 'hil' && isDualPackage && (
+                            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded p-3">
+                              <div className="flex items-center space-x-2 mb-2">
+                                <User className="h-4 w-4 text-yellow-600" />
+                                <span className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                                  Dual Package HIL Review
+                                </span>
+                              </div>
+                              <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                                This step will review both parent and child data packages separately.
+                                Each package must be approved before proceeding to the next step.
+                              </p>
+                            </div>
+                          )}
+
+                          {isCompleted && (
+                            <div className="text-xs text-green-600 dark:text-green-400 mt-2">
+                              ✓ Step completed successfully
+                            </div>
+                          )}
+
+                          {isCurrent && (
+                            <div className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+                              ⟳ Currently processing this step...
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
   };
 
-  const handleFetch = async () => {
-    setFetchLoading(true);
-    try {
-      await apiService.fetchComparatorData(id, { targets: fetchTargets });
-      
-      // Refresh document data
-      setTimeout(async () => {
-        await fetchDocument();
-      }, 2000);
-    } catch (err) {
-      setError('Failed to start fetch process');
-      console.error(err);
-    } finally {
-      setFetchLoading(false);
-    }
+  // ===== HELPER FUNCTIONS =====
+
+  const getStepName = (stepType) => {
+    const names = {
+      extraction: 'Data Extraction',
+      hil: 'Human Review',
+      fetch: 'Data Fetching',
+      reconcile: 'Data Reconciliation',
+      send: 'Data Transmission'
+    };
+    return names[stepType] || stepType;
   };
 
-  const handleReconcile = async () => {
-    setReconcileLoading(true);
-    try {
-      const response = await apiService.reconcileDocument(id, {
-        strategy: reconcileStrategy,
-        thresholds: { exact: 1.0, fuzzy: 0.85 }
-      });
-      
-      setReconcileResult(response.data);
-      await fetchDocument();
-    } catch (err) {
-      setError('Failed to reconcile document');
-      console.error(err);
-    } finally {
-      setReconcileLoading(false);
-    }
+  const getStepDescription = (stepType) => {
+    const descriptions = {
+      extraction: 'Extracting structured data from the document',
+      hil: 'Human-in-the-loop review and validation',
+      fetch: 'Fetching additional data from external sources',
+      reconcile: 'Reconciling extracted data with external data',
+      send: 'Transmitting processed data to destination'
+    };
+    return descriptions[stepType] || '';
   };
 
-  const handleFinalize = async () => {
-    setFinalizeLoading(true);
-    try {
-      await apiService.finalizeDocument(id, {
-        decision: finalizeDecision,
-        decider: 'Test User',
-        notes: finalizeNotes || null
-      });
-      
-      await fetchDocument();
-      setActiveTab('status');
-    } catch (err) {
-      setError('Failed to finalize document');
-      console.error(err);
-    } finally {
-      setFinalizeLoading(false);
-    }
+  const getStepCompletionStatus = (stepType) => {
+    if (!document) return false;
+
+    const state = document.state?.toLowerCase();
+    const stepMappings = {
+      extraction: ['hil_required', 'hil_confirmed', 'fetched', 'reconciled', 'approved', 'rejected'],
+      hil: ['hil_confirmed', 'fetched', 'reconciled', 'approved', 'rejected'],
+      fetch: ['fetched', 'reconciled', 'approved', 'rejected'],
+      reconcile: ['reconciled', 'approved', 'rejected'],
+      send: ['approved', 'rejected']
+    };
+
+    return stepMappings[stepType]?.includes(state) || false;
   };
 
-  const updateCorrection = (field, value, correctionReason) => {
-    setCorrections(prev => ({
-      ...prev,
-      [field]: {
-        ...prev[field],
-        value,
-        correction_reason: correctionReason || (value !== hilData?.extracted?.[field]?.value ? 'Manual correction' : null)
-      }
-    }));
+  const getCurrentStepStatus = (stepType) => {
+    if (!document) return false;
+
+    const state = document.state?.toLowerCase();
+    const stepMappings = {
+      extraction: ['ingested'],
+      hil: ['hil_required'],
+      fetch: ['fetch_pending'],
+      reconcile: ['fetched'],
+      send: ['reconciled']
+    };
+
+    return stepMappings[stepType]?.includes(state) || false;
   };
 
-  const updateDocumentType = async (newType) => {
-    try {
-      console.log(`Updating document ${id} type to ${newType}...`);
-      await apiService.updateDocumentType(id, newType);
-      console.log('Document type updated successfully');
-      // Refresh the document data
-      fetchDocument();
-      // Don't automatically fetch HIL data to prevent retry loops
-      // fetchHilData();
-    } catch (err) {
-      console.error('Failed to update document type:', err);
-      if (err.code === 'ECONNREFUSED') {
-        alert('Backend server is not running. Please start the backend server.');
-      }
+  // ===== HIL REVIEW RENDER FUNCTION (overview-but-editable) =====
+  const renderHilReviewTab = () => {
+    if (!document) {
+                            return (
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-600 p-6">
+          <div className="text-center">
+            <User className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Document Not Found</h3>
+            <p className="text-gray-600 dark:text-slate-400">
+              Unable to load document information.
+            </p>
+          </div>
+        </div>
+      );
     }
+
+    if (document.state === 'HIL_CONFIRMED') {
+      return (
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-green-200 dark:border-green-700 p-6">
+          <div className="text-center">
+            <div className="w-16 h-16 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Check className="h-8 w-8 text-green-600 dark:text-green-400" />
+                            </div>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">HIL Review Completed</h3>
+            <p className="text-gray-600 dark:text-slate-400">
+              This document has been reviewed and approved. All pipeline steps have been completed successfully.
+            </p>
+                      </div>
+                    </div>
+                  );
+    }
+
+    if (document.state !== 'HIL_REQUIRED') {
+      return (
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-600 p-6">
+          <div className="text-center">
+            <User className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No HIL Review Required</h3>
+            <p className="text-gray-600 dark:text-slate-400">
+              This document is not currently in the HIL review stage or does not require manual review.
+            </p>
+                  </div>
+        </div>
+      );
+    }
+
+    const isDualPackage = customDocType?.pipeline_config?.objects?.length > 1 ||
+      document.pipeline_custom_doc_type_name?.includes('parent') ||
+      document.pipeline_custom_doc_type_name?.includes('child');
+
+    return (
+      <div className="space-y-6">
+        {/* HIL Review Header */}
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-yellow-200 dark:border-yellow-700 p-6">
+          <div className="flex items-center space-x-3 mb-4">
+            <User className="h-6 w-6 text-yellow-600" />
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Human-in-the-Loop Review</h3>
+              <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
+                Review the extracted data and approve or reject the processing results
+              </p>
+                  </div>
+            {isDualPackage && (
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                Dual Package Review
+              </span>
+            )}
+                </div>
+
+          {/* Review Instructions */}
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-4">
+            <h4 className="font-medium text-yellow-800 dark:text-yellow-200 mb-2">How it works</h4>
+            <ul className="text-sm text-yellow-700 dark:text-yellow-300 space-y-1">
+              <li>• Edit fields below, including table rows</li>
+              <li>• Click Save Corrections to persist changes</li>
+              <li>• Approve or Reject the entire document when done</li>
+            </ul>
+          </div>
+              </div>
+        {/* Editable Extraction (mirrors overview) */}
+        {document.latest_extraction && (
+          <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-600 p-6">
+            <div className="space-y-4">
+              {Object.entries(document.latest_extraction)
+                .filter(([key]) => !key.startsWith('_'))
+                .map(([fieldName, fieldData]) => {
+                  const val = hilEdits[fieldName];
+                  const isArray = Array.isArray(val);
+                  const isArrayOfObjects = isArray && val.every((row) => row && typeof row === 'object' && !Array.isArray(row));
+                  const setField = (updater) => setHilEdits(prev => ({ ...prev, [fieldName]: typeof updater === 'function' ? updater(prev[fieldName]) : updater }));
+                  const columns = isArrayOfObjects ? Array.from(new Set((val || []).flatMap((r) => Object.keys(r || {})))) : [];
+
+                  const typeHint = (fieldData?.type_hint || '').toLowerCase();
+                  const inputType = typeHint.includes('date') ? 'date' : (typeHint.includes('number') || typeof fieldData?.value === 'number') ? 'number' : 'text';
+
+                  return (
+                    <div key={fieldName} className="border border-gray-200 dark:border-slate-600 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-medium text-gray-900 dark:text-white">{fieldName}</h4>
+                          {Array.isArray(fieldData?.value) && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200">{(val || []).length} items</span>
+                          )}
+                        </div>
+                        {fieldData.confidence !== undefined && (
+                          <ConfidenceIndicator confidence={fieldData.confidence} />
+                        )}
+                      </div>
+
+                      {isArrayOfObjects ? (
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full text-sm border border-gray-200 dark:border-slate-600 rounded-md">
+                            <thead className="bg-gray-50 dark:bg-slate-700">
+                              <tr>
+                                {columns.map((col) => (
+                                  <th key={col} className="px-3 py-2 text-left font-medium text-gray-700 dark:text-slate-200 border-b border-gray-200 dark:border-slate-600">{col}</th>
+                                ))}
+                                <th className="w-12 border-b border-gray-200 dark:border-slate-600"></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(val || []).map((row, rIdx) => (
+                                <tr key={rIdx} className="odd:bg-white even:bg-gray-50 dark:odd:bg-slate-800 dark:even:bg-slate-700">
+                                  {columns.map((col) => (
+                                    <td key={col} className="px-3 py-2 border-b border-gray-200 dark:border-slate-600">
+                                      <input
+                                        className="w-full px-2 py-1 border border-gray-300 dark:border-slate-600 rounded"
+                                        value={row?.[col] ?? ''}
+                                        onChange={(e) => setField(prevVal => {
+                                          const rows = Array.isArray(prevVal) ? [...prevVal] : [];
+                                          const next = { ...(rows[rIdx] || {}) };
+                                          next[col] = e.target.value;
+                                          rows[rIdx] = next;
+                                          return rows;
+                                        })}
+                                      />
+                                    </td>
+                                  ))}
+                                  <td className="px-2 py-2 border-b border-gray-200 dark:border-slate-600 text-center">
+                                    <button className="text-red-600 text-xs" onClick={() => setField((prevVal) => (prevVal || []).filter((_, i) => i !== rIdx))}>Remove</button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          <div className="mt-2">
+                            <button className="text-sm px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 border border-gray-200" onClick={() => setField([...(val || []), {}])}>Add Row</button>
+                          </div>
+                        </div>
+                      ) : Array.isArray(val) ? (
+                        <div>
+                          {(val || []).map((item, i) => (
+                            <div key={i} className="flex items-center gap-2 mb-2">
+                              <input className="flex-1 px-2 py-1 border border-gray-300 dark:border-slate-600 rounded" value={String(item ?? '')} onChange={(e) => setField(prev => { const next = Array.isArray(prev) ? [...prev] : []; next[i] = e.target.value; return next; })} />
+                              <button className="text-red-600 text-xs" onClick={() => setField(prev => (prev || []).filter((_, idx) => idx !== i))}>Remove</button>
+                            </div>
+                          ))}
+                          <button className="text-sm px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 border border-gray-200" onClick={() => setField([...(val || []), ''])}>Add Item</button>
+                        </div>
+                      ) : typeof val === 'object' && val !== null ? (
+                        <textarea className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded text-xs" rows={4} value={JSON.stringify(val, null, 2)} onChange={(e) => { try { setField(JSON.parse(e.target.value)); } catch {} }} />
+                      ) : (
+                        <input className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded" type={inputType} value={val ?? ''} onChange={(e) => setField(inputType === 'number' ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value)} />
+                      )}
+
+                      {fieldData.type_hint && (
+                        <div className="mt-2 text-xs text-gray-500">Type: {fieldData.type_hint}</div>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        )}
+
+        {/* Overall Review Actions */}
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-600 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Save and Decide</h3>
+
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Reviewer Notes</label>
+            <textarea className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md text-sm" rows={3} placeholder="Add overall feedback (optional)" value={hilNotes} onChange={(e) => setHilNotes(e.target.value)} />
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center justify-between">
+            <button onClick={saveHilCorrections} disabled={savingHil} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">{savingHil ? 'Saving...' : 'Save Corrections'}</button>
+            <button
+              onClick={() => submitHilReview('reject')}
+              disabled={submittingHil}
+              className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {submittingHil ? 'Submitting...' : 'Reject Document'}
+            </button>
+
+            <button
+              onClick={() => submitHilReview('approve')}
+              disabled={submittingHil}
+              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {submittingHil ? 'Submitting...' : 'Approve Document'}
+            </button>
+                  </div>
+              </div>
+            </div>
+    );
   };
+
+  // ===== MAIN RENDER =====
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <RefreshCw className="h-8 w-8 animate-spin text-primary-500" />
-        <span className="ml-2 text-secondary">Loading document...</span>
-      </div>
+      <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
+          <p className="text-gray-600 dark:text-slate-400">Loading document details...</p>
+                  </div>
+              </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="h-8 w-8 mx-auto mb-4 text-red-600" />
+          <p className="text-red-600 mb-4">{error}</p>
+                  <button
+            onClick={() => window.history.back()}
+            className="btn btn-secondary"
+                  >
+            Go Back
+                  </button>
+                </div>
+              </div>
     );
   }
 
   if (!document) {
     return (
-      <div className="text-center py-12">
-        <XCircle className="mx-auto h-12 w-12 text-red-500" />
-        <h3 className="mt-4 text-lg font-medium text-primary">Document not found</h3>
-      </div>
+      <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <FileText className="h-8 w-8 mx-auto mb-4 text-gray-400" />
+          <p className="text-gray-600 dark:text-slate-400">Document not found</p>
+                        </div>
+                      </div>
     );
   }
 
-  const tabs = [
-    { id: 'status', name: 'Pipeline Status', icon: Eye },
-    { id: 'hil', name: 'Human Review', icon: User, disabled: document.state !== 'HIL_REQUIRED' },
-    { id: 'fetch', name: 'Fetch Data', icon: Download, disabled: document.state !== 'HIL_CONFIRMED' },
-    { id: 'reconcile', name: 'Reconcile', icon: GitCompare, disabled: document.state !== 'FETCHED' },
-    { id: 'finalize', name: 'Finalize', icon: CheckCircle, disabled: document.state !== 'RECONCILED' },
-    { id: 'debug', name: 'AI Debug', icon: Settings },
-    { id: 'rag', name: 'Knowledge Base', icon: Tag },
-  ];
-
   return (
-    <div className="max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-primary">{document.filename}</h1>
-          <p className="mt-2 text-secondary">Document ID: {document.document_id}</p>
-        </div>
-        
-        <button
-          onClick={fetchDocument}
-          disabled={loading}
-          className="btn btn-secondary"
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
-      </div>
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-900">
+      <div className="container mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="mb-8">
+          <button
+            onClick={() => window.history.back()}
+            className="flex items-center space-x-2 text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white mb-4"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Back to Documents</span>
+          </button>
 
-      {error && (
-        <div className="mb-6 p-4 status-error rounded-lg">
-          <p>{error}</p>
-        </div>
-      )}
-
-      {/* Tab Navigation */}
-      <div className="mb-8">
-        <nav className="flex space-x-8">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => !tab.disabled && setActiveTab(tab.id)}
-                disabled={tab.disabled}
-                className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                  activeTab === tab.id
-                    ? 'bg-primary-100 dark:bg-primary-700 text-primary'
-                    : tab.disabled
-                    ? 'text-muted cursor-not-allowed'
-                    : 'text-secondary hover:text-primary hover:bg-primary-50 dark:hover:bg-primary-700'
-                }`}
-              >
-                <Icon className="h-4 w-4 mr-2" />
-                {tab.name}
-              </button>
-            );
-          })}
-        </nav>
-      </div>
-
-      {/* Document Preview */}
-      {document.content && (
-        <div className="card mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-primary flex items-center">
-              <Image className="h-5 w-5 mr-2" />
-              Document Preview
-            </h3>
-          </div>
-          
-          <div className="bg-gray-50 dark:bg-slate-800 rounded-lg p-4 max-h-96 overflow-auto">
-            {document.mime_type?.startsWith('image/') ? (
-              <img 
-                src={`data:${document.mime_type};base64,${document.content}`}
-                alt={document.filename}
-                className="max-w-full h-auto rounded border mx-auto"
-              />
-            ) : (
-              <div className="flex items-center justify-center h-32 text-gray-500">
-                <FileText className="h-8 w-8 mr-2" />
-                <span>Preview not available for {document.mime_type}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Tab Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main Content Area */}
-        <div className="lg:col-span-2">
-          {activeTab === 'status' && (
-            <PipelineStatus currentState={document.state} document={document} />
-          )}
-
-          {activeTab === 'hil' && (
-            <div className="card">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-semibold text-primary flex items-center">
-                  <User className="h-5 w-5 mr-2" />
-                  Human Review & Corrections
-                </h3>
-                <div className="text-sm text-gray-500">
-                  {Object.keys(corrections).length} fields to review
-                  {Object.keys(corrections).length === 0 && (
-                    <span className="text-red-500 ml-2">
-                      (No data loaded - check console for details)
-                    </span>
-                  )}
-                </div>
-              </div>
-              
-              <div className="grid gap-6">
-                                {(() => {
-                  // Check if we have a custom document type with schema
-                  const detectedType = hilData?.extracted?.document_type?.value?.toLowerCase();
-                  const matchingDocType = documentTypes.find(dt => 
-                    dt.name.toLowerCase().includes('receipt') || 
-                    dt.name.toLowerCase().includes('purchase') ||
-                    (detectedType && dt.name.toLowerCase().includes(detectedType))
-                  );
-                  
-                  console.log('Detected type:', detectedType);
-                  console.log('Matching doc type:', matchingDocType);
-                  console.log('Current document type:', document?.document_type);
-                  
-                  // If we have a matching custom document type with schema, use it
-                  if (matchingDocType && matchingDocType.output_schema && Object.keys(matchingDocType.output_schema).length > 0) {
-                    const schema = matchingDocType.output_schema;
-                    // Use document.latest_extraction as primary source since HIL data is null
-                    const extractedData = document?.latest_extraction || hilData?.extracted_full || hilData?.extracted || {};
-                    
-                                         // Generate fields from the custom schema and populate with extracted data
-                     const schemaFields = {};
-                     console.log('Raw extracted data structure:', extractedData);
-                     console.log('Schema to map:', schema);
-                     
-                     Object.entries(schema).forEach(([fieldName, fieldDef]) => {
-                       // Look for the field in multiple places in the extracted data
-                       let extractedValue = null;
-                       let confidence = 0.8;
-                       
-                       // Smart field matching - try multiple strategies
-                       const findFieldValue = (data, targetField) => {
-                         // Strategy 1: Direct match in instructed_fields
-                         if (data.instructed_fields?.[targetField]) {
-                           const field = data.instructed_fields[targetField];
-                           return { value: field.value || field, confidence: field.confidence || 0.8 };
-                         }
-                         
-                         // Strategy 2: Direct match in all_fields  
-                         if (data.all_fields?.[targetField]) {
-                           const field = data.all_fields[targetField];
-                           return { value: field.value || field, confidence: field.confidence || 0.8 };
-                         }
-                         
-                         // Strategy 3: Direct match at root level
-                         if (data[targetField]) {
-                           const field = data[targetField];
-                           return { value: field.value || field, confidence: field.confidence || 0.8 };
-                         }
-                         
-                         // Strategy 4: Fuzzy matching with common field name variations
-                         const fieldVariations = {
-                           'merchant_name': ['merchant', 'store', 'vendor', 'company', 'business', 'company_name', 'store_name', 'merchant_name'],
-                           'merchant_address': ['address', 'location', 'store_address', 'merchant_address', 'company_address'],
-                           'transaction_date': ['date', 'transaction_date', 'purchase_date', 'receipt_date'],
-                           'transaction_time': ['time', 'transaction_time', 'receipt_time'],
-                           'receipt_number': ['receipt', 'number', 'receipt_number', 'invoice_number', 'transaction_id'],
-                           'subtotal': ['subtotal', 'sub_total', 'amount', 'subtotal_amount'],
-                           'tax_amount': ['tax', 'tax_amount', 'vat', 'sales_tax'],
-                           'total_amount': ['total', 'total_amount', 'grand_total', 'final_total', 'amount_total'],
-                           'currency': ['currency', 'curr', 'currency_code'],
-                           'payment_method': ['payment', 'method', 'payment_method', 'payment_type', 'pay_method']
-                         };
-                         
-                         const variations = fieldVariations[targetField] || [targetField];
-                         
-                         // Search in instructed_fields
-                         if (data.instructed_fields) {
-                           for (const variation of variations) {
-                             const found = Object.keys(data.instructed_fields).find(key => 
-                               key.toLowerCase().includes(variation.toLowerCase()) || 
-                               variation.toLowerCase().includes(key.toLowerCase())
-                             );
-                             if (found) {
-                               const field = data.instructed_fields[found];
-                               return { value: field.value || field, confidence: field.confidence || 0.8 };
-                             }
-                           }
-                         }
-                         
-                         // Search in all_fields
-                         if (data.all_fields) {
-                           for (const variation of variations) {
-                             const found = Object.keys(data.all_fields).find(key => 
-                               key.toLowerCase().includes(variation.toLowerCase()) || 
-                               variation.toLowerCase().includes(key.toLowerCase())
-                             );
-                             if (found) {
-                               const field = data.all_fields[found];
-                               return { value: field.value || field, confidence: field.confidence || 0.8 };
-                             }
-                           }
-                         }
-                         
-                         // Search at root level
-                         for (const variation of variations) {
-                           const found = Object.keys(data).find(key => 
-                             key.toLowerCase().includes(variation.toLowerCase()) || 
-                             variation.toLowerCase().includes(key.toLowerCase())
-                           );
-                           if (found) {
-                             const field = data[found];
-                             return { value: field.value || field, confidence: field.confidence || 0.8 };
-                           }
-                         }
-                         
-                         return null;
-                       };
-                       
-                       const result = findFieldValue(extractedData, fieldName);
-                       if (result) {
-                         extractedValue = result.value;
-                         confidence = result.confidence;
-                       }
-                       
-                       console.log(`Field ${fieldName}: extracted value =`, extractedValue, `confidence =`, confidence);
-                       
-                       schemaFields[fieldName] = {
-                         value: extractedValue || '',
-                         confidence: confidence,
-                         type_hint: fieldDef.type || 'string',
-                         schema_definition: fieldDef
-                       };
-                     });
-                    
-                    console.log('Using custom schema fields:', schemaFields);
-                    
-                    return Object.entries(schemaFields).map(([field, data]) => (
-                      <SmartFieldEditor
-                        key={field}
-                        field={field}
-                        data={data}
-                        onUpdate={(updatedData) => updateCorrection(field, updatedData.value, updatedData.correction_reason)}
-                      />
-                    ));
-                  }
-                  
-                  // If schema-based corrections exist, show them
-                  if (Object.entries(corrections).length > 0) {
-                    return Object.entries(corrections).map(([field, data]) => (
-                      <SmartFieldEditor
-                        key={field}
-                        field={field}
-                        data={data}
-                        onUpdate={(updatedData) => updateCorrection(field, updatedData.value, updatedData.correction_reason)}
-                      />
-                    ));
-                  }
-                  
-                  // Show available document types if no schema is found
-                  return (
-                    <div className="text-center py-8">
-                      <div className="text-gray-500 dark:text-gray-400 mb-4">
-                        <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                        <h4 className="text-lg font-medium mb-2">Select Document Type</h4>
-                        <p className="text-sm mb-4">
-                          Choose the correct document type to show the appropriate fields for editing.
-                        </p>
-                        
-                        <div className="grid gap-2 max-w-md mx-auto">
-                          {documentTypes.filter(dt => dt.output_schema && Object.keys(dt.output_schema).length > 0).map(docType => {
-                            // Map custom document type names to enum values
-                            const getEnumType = (name) => {
-                              const lowerName = name.toLowerCase();
-                              if (lowerName.includes('receipt') || lowerName.includes('purchase')) return 'RECEIPT';
-                              if (lowerName.includes('invoice')) return 'INVOICE';
-                              if (lowerName.includes('log') || lowerName.includes('entry')) return 'ENTRY_EXIT_LOG';
-                              return 'RECEIPT'; // Default fallback
-                            };
-                            
-                            return (
-                              <button
-                                key={docType.id}
-                                onClick={() => {
-                                  const enumType = getEnumType(docType.name);
-                                  console.log('Setting document type to enum:', enumType, 'for custom type:', docType.name);
-                                  updateDocumentType(enumType);
-                                }}
-                                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm flex items-center justify-center"
-                              >
-                                <FileText className="h-4 w-4 mr-2" />
-                                {docType.name}
-                              </button>
-                            );
-                          })}
-                          
-                          {documentTypes.length === 0 && (
-                            <div className="text-sm text-gray-500">
-                              No document types with schemas found.
-                              <br />
-                              <button 
-                                onClick={() => window.open('/doc-types', '_blank')}
-                                className="text-blue-600 hover:underline mt-2"
-                              >
-                                Create document types →
-                              </button>
-                            </div>
-                    )}
-                  </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-                
-                {/* Add new field - only show if we have existing fields */}
-                {Object.entries(corrections).length > 0 && (
-                  <div className="border-2 border-dashed border-gray-300 dark:border-slate-600 rounded-lg p-4 text-center">
-                    <button className="text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors">
-                      <Plus className="h-5 w-5 mx-auto mb-2" />
-                      <div className="text-sm">Add Missing Field</div>
-                    </button>
-                  </div>
-                )}
-                
-                {/* Action buttons */}
-                <div className="flex justify-between items-center pt-4 border-t">
-                  <div className="flex space-x-3">
-                                         <button
-                       onClick={() => {
-                         console.log('=== COMPREHENSIVE DEBUG INFO ===');
-                         console.log('Document:', document);
-                         console.log('Document Type:', document?.document_type);
-                         console.log('Document Types Available:', documentTypes);
-                         console.log('Current Schema:', currentDocTypeSchema);
-                         console.log('HIL Data:', hilData);
-                         console.log('HIL Data extracted_full:', hilData?.extracted_full);
-                         console.log('HIL Data extracted:', hilData?.extracted);
-                         console.log('Corrections:', corrections);
-                         console.log('Document State:', document?.state);
-                         console.log('Latest Extraction:', document?.latest_extraction);
-                         
-                         // Check if we can find a matching document type
-                         const detectedType = hilData?.extracted?.document_type?.value?.toLowerCase();
-                         const matchingDocType = documentTypes.find(dt => 
-                           dt.name.toLowerCase().includes('receipt') || 
-                           dt.name.toLowerCase().includes('purchase') ||
-                           (detectedType && dt.name.toLowerCase().includes(detectedType))
-                         );
-                         console.log('Detected type:', detectedType);
-                         console.log('Matching doc type:', matchingDocType);
-                         console.log('Matching doc type schema:', matchingDocType?.output_schema);
-                         
-                         // Test data extraction manually
-                         if (matchingDocType?.output_schema) {
-                           const schema = matchingDocType.output_schema;
-                           const extractedData = hilData?.extracted_full || hilData?.extracted || document?.latest_extraction || {};
-                           console.log('=== MANUAL FIELD MAPPING TEST ===');
-                           console.log('Schema fields:', Object.keys(schema));
-                           console.log('Available extracted data keys:', Object.keys(extractedData));
-                           if (extractedData.instructed_fields) console.log('instructed_fields keys:', Object.keys(extractedData.instructed_fields));
-                           if (extractedData.all_fields) console.log('all_fields keys:', Object.keys(extractedData.all_fields));
-                           
-                           // Show all available fields for debugging
-                                                    console.log('=== ALL AVAILABLE FIELDS ===');
-                         console.log('FULL extractedData structure:', extractedData);
-                         if (extractedData.instructed_fields) {
-                           console.log('instructed_fields:', extractedData.instructed_fields);
-                           console.log('instructed_fields KEYS:', Object.keys(extractedData.instructed_fields));
-                         }
-                         if (extractedData.all_fields) {
-                           console.log('all_fields:', extractedData.all_fields);
-                           console.log('all_fields KEYS:', Object.keys(extractedData.all_fields));
-                         }
-                         console.log('root level fields:', Object.keys(extractedData).filter(key => !['instructed_fields', 'all_fields'].includes(key)));
-                         
-                         // Show ALL top-level fields
-                         Object.keys(extractedData).forEach(key => {
-                           console.log(`Root field "${key}":`, extractedData[key]);
-                         });
-                           
-                           Object.keys(schema).forEach(fieldName => {
-                             console.log(`Looking for field "${fieldName}":`);
-                             if (extractedData.instructed_fields?.[fieldName]) {
-                               console.log(`  Found direct match in instructed_fields:`, extractedData.instructed_fields[fieldName]);
-                             }
-                             if (extractedData.all_fields?.[fieldName]) {
-                               console.log(`  Found direct match in all_fields:`, extractedData.all_fields[fieldName]);
-                             }
-                             if (extractedData[fieldName]) {
-                               console.log(`  Found direct match in root:`, extractedData[fieldName]);
-                             }
-                             
-                             // Show fuzzy matches
-                             const fieldVariations = {
-                               'merchant_name': ['merchant', 'store', 'vendor', 'company', 'business'],
-                               'merchant_address': ['address', 'location', 'store_address'],
-                               'transaction_date': ['date', 'transaction_date', 'purchase_date'],
-                               'transaction_time': ['time', 'transaction_time'],
-                               'receipt_number': ['receipt', 'number', 'receipt_number', 'invoice_number'],
-                               'subtotal': ['subtotal', 'sub_total', 'amount'],
-                               'tax_amount': ['tax', 'tax_amount', 'vat'],
-                               'total_amount': ['total', 'total_amount', 'grand_total', 'final_total'],
-                               'currency': ['currency', 'curr'],
-                               'payment_method': ['payment', 'method', 'payment_method', 'payment_type']
-                             };
-                             
-                             const variations = fieldVariations[fieldName] || [fieldName];
-                             console.log(`  Searching for variations:`, variations);
-                             
-                             if (extractedData.instructed_fields) {
-                               variations.forEach(variation => {
-                                 const found = Object.keys(extractedData.instructed_fields).find(key => 
-                                   key.toLowerCase().includes(variation.toLowerCase()) || 
-                                   variation.toLowerCase().includes(key.toLowerCase())
-                                 );
-                                 if (found) {
-                                   console.log(`  Found fuzzy match "${found}" in instructed_fields:`, extractedData.instructed_fields[found]);
-                                 }
-                               });
-                             }
-                           });
-                         }
-                       }}
-                       className="text-sm px-3 py-1 bg-blue-100 dark:bg-blue-900 rounded-md hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
-                     >
-                       Full Debug
-                     </button>
-                    
-                                         <button
-                       onClick={() => {
-                         console.log('Manually refreshing HIL data...');
-                         console.log('Current document:', document);
-                         console.log('Current hilData:', hilData);
-                         console.log('Available documentTypes:', documentTypes);
-                         fetchHilData();
-                       }}
-                       className="text-sm px-3 py-1 bg-green-100 dark:bg-green-900 rounded-md hover:bg-green-200 dark:hover:bg-green-800 transition-colors"
-                     >
-                       Refresh Fields
-                     </button>
-                    
-                    <button
-                      onClick={() => {
-                        console.log('Forcing update to RECEIPT...');
-                        updateDocumentType('RECEIPT');
-                      }}
-                      className="text-sm px-3 py-1 bg-orange-100 dark:bg-orange-900 rounded-md hover:bg-orange-200 dark:hover:bg-orange-800 transition-colors"
-                    >
-                      Force → Receipt
-                    </button>
-                    
-                    <button
-                      onClick={() => setShowRawData(!showRawData)}
-                      className="text-sm px-3 py-1 bg-gray-100 dark:bg-slate-700 rounded-md hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
-                    >
-                      {showRawData ? 'Hide' : 'Show'} Raw Data
-                    </button>
-                  </div>
-                  
-                  <div className="flex space-x-3">
-                    <button className="btn btn-secondary">
-                      <X className="h-4 w-4 mr-2" />
-                      Reset All
-                    </button>
-                <button
-                  onClick={handleHilUpdate}
-                  disabled={hilLoading}
-                  className="btn btn-primary"
-                >
-                  {hilLoading ? (
-                    <>
-                      <RefreshCw className="animate-spin h-4 w-4 mr-2" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4 mr-2" />
-                          Save All Corrections
-                    </>
-                  )}
-                </button>
-                  </div>
-                </div>
-
-                {/* Raw data viewer */}
-                {showRawData && hilData.extracted_full && (
-                  <div className="mt-6 border-t pt-6">
-                    <h4 className="text-sm font-medium text-primary mb-3 flex items-center">
-                      <FileText className="h-4 w-4 mr-2" />
-                      Full Extraction Data (Raw JSON)
-                    </h4>
-                    <pre className="bg-gray-50 dark:bg-slate-800 p-4 rounded-lg text-xs overflow-auto max-h-64 border">
-                      {JSON.stringify(hilData.extracted_full, null, 2)}
-                    </pre>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'fetch' && (
-            <div className="card">
-              <h3 className="text-lg font-semibold text-primary mb-6">Fetch External Data</h3>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="label">Fetch Targets</label>
-                  <select
-                    multiple
-                    className="input"
-                    value={fetchTargets}
-                    onChange={(e) => setFetchTargets(Array.from(e.target.selectedOptions, option => option.value))}
-                  >
-                    <option value="example_vendor">Example Vendor</option>
-                    <option value="external_api">External API</option>
-                  </select>
-                  <p className="text-sm text-secondary mt-1">
-                    Hold Ctrl/Cmd to select multiple targets
-                  </p>
-                </div>
-                
-                <button
-                  onClick={handleFetch}
-                  disabled={fetchLoading}
-                  className="btn btn-primary"
-                >
-                  {fetchLoading ? (
-                    <>
-                      <RefreshCw className="animate-spin h-4 w-4 mr-2" />
-                      Fetching...
-                    </>
-                  ) : (
-                    <>
-                      <Play className="h-4 w-4 mr-2" />
-                      Start Fetch
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'reconcile' && (
-            <div className="card">
-              <h3 className="text-lg font-semibold text-primary mb-6">Reconcile Data</h3>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="label">Reconciliation Strategy</label>
-                  <select
-                    className="input"
-                    value={reconcileStrategy}
-                    onChange={(e) => setReconcileStrategy(e.target.value)}
-                  >
-                    <option value="STRICT">Strict Matching</option>
-                    <option value="LOOSE">Loose Matching</option>
-                    <option value="FUZZY">Fuzzy Matching</option>
-                  </select>
-                </div>
-                
-                <button
-                  onClick={handleReconcile}
-                  disabled={reconcileLoading}
-                  className="btn btn-primary"
-                >
-                  {reconcileLoading ? (
-                    <>
-                      <RefreshCw className="animate-spin h-4 w-4 mr-2" />
-                      Reconciling...
-                    </>
-                  ) : (
-                    <>
-                      <GitCompare className="h-4 w-4 mr-2" />
-                      Start Reconciliation
-                    </>
-                  )}
-                </button>
-                
-                {reconcileResult && (
-                  <div className="mt-6 p-4 bg-primary-50 dark:bg-primary-700 rounded-lg border border-primary-200 dark:border-primary-600">
-                    <h4 className="font-medium text-primary mb-2">Reconciliation Results</h4>
-                    <p className="text-sm text-secondary mb-2">
-                      Overall Score: {(reconcileResult.score_overall * 100).toFixed(1)}%
-                    </p>
-                    <div className="space-y-2">
-                      {reconcileResult.result.map((diff, index) => (
-                        <div key={index} className="text-sm">
-                          <span className="font-medium">{diff.field}:</span>
-                          <span className={`ml-2 px-2 py-1 rounded text-xs ${
-                            diff.status === 'MATCH' ? 'bg-green-100 text-green-800' :
-                            diff.status === 'MISMATCH' ? 'bg-red-100 text-red-800' :
-                            'bg-yellow-100 text-yellow-800'
-                          }`}>
-                            {diff.status}
-                          </span>
-                          <span className="ml-2 text-secondary">
-                            Score: {(diff.match_score * 100).toFixed(1)}%
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'finalize' && (
-            <div className="card">
-              <h3 className="text-lg font-semibold text-primary mb-6">Finalize Processing</h3>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="label">Decision</label>
-                  <select
-                    className="input"
-                    value={finalizeDecision}
-                    onChange={(e) => setFinalizeDecision(e.target.value)}
-                  >
-                    <option value="APPROVED">Approve</option>
-                    <option value="REJECTED">Reject</option>
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="label">Notes (Optional)</label>
-                  <textarea
-                    className="input"
-                    rows={3}
-                    placeholder="Add any notes about this decision..."
-                    value={finalizeNotes}
-                    onChange={(e) => setFinalizeNotes(e.target.value)}
-                  />
-                </div>
-                
-                <button
-                  onClick={handleFinalize}
-                  disabled={finalizeLoading}
-                  className={`btn ${finalizeDecision === 'APPROVED' ? 'btn-success' : 'btn-error'}`}
-                >
-                  {finalizeLoading ? (
-                    <>
-                      <RefreshCw className="animate-spin h-4 w-4 mr-2" />
-                      Processing...
-                    </>
-                  ) : (
-                    <>
-                      {finalizeDecision === 'APPROVED' ? 
-                        <CheckCircle className="h-4 w-4 mr-2" /> : 
-                        <XCircle className="h-4 w-4 mr-2" />
-                      }
-                      {finalizeDecision === 'APPROVED' ? 'Approve' : 'Reject'} Document
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'debug' && (
-            <DebugPanel 
-              documentId={parseInt(id)} 
-              currentStage={document.state} 
-              documentData={document} 
-            />
-          )}
-
-          {activeTab === 'rag' && (
-            <RagManager 
-              documentType={document.document_type || 'UNKNOWN'} 
-            />
-          )}
-        </div>
-
-        {/* Document Info Sidebar */}
-        <div>
-          <div className="card">
-            <h3 className="text-lg font-semibold text-primary mb-4">Document Details</h3>
-            
-            <dl className="space-y-3">
-              <div>
-                <dt className="text-sm font-medium text-secondary">Status</dt>
-                <dd className="text-sm text-primary">{document.state ? document.state.replace(/_/g, ' ') : 'Unknown'}</dd>
-              </div>
-
-              <div>
-                <dt className="text-sm font-medium text-secondary">Document Type</dt>
-                <dd className="text-sm text-primary">
-                  <div className="flex items-center space-x-2">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      document.document_type === 'INVOICE' ? 'doc-type-invoice' :
-                      document.document_type === 'RECEIPT' ? 'doc-type-receipt' :
-                      document.document_type === 'ENTRY_EXIT_LOG' ? 'doc-type-log' :
-                      'doc-type-default'
-                    }`}>
-                      {document.document_type ? document.document_type.replace(/_/g, ' ') : 'Unknown'}
-                    </span>
-                    <Tag className="h-3 w-3 text-muted" />
-                  </div>
-                </dd>
-              </div>
-              
-              <div>
-                <dt className="text-sm font-medium text-secondary">Uploaded</dt>
-                <dd className="text-sm text-primary">
-                  {new Date(document.uploaded_at).toLocaleString()}
-                </dd>
-              </div>
-              
-              {document.latest_extraction && (
-                <div>
-                  <dt className="text-sm font-medium text-secondary">Extracted Fields</dt>
-                  <dd className="text-sm text-primary">
-                    {Object.keys(document.latest_extraction).length} fields
-                  </dd>
-                </div>
-              )}
-              
-              {document.final_decision && (
-                <div>
-                  <dt className="text-sm font-medium text-secondary">Final Decision</dt>
-                  <dd className={`text-sm font-medium ${
-                    document.final_decision.decision === 'APPROVED' ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {document.final_decision.decision}
-                  </dd>
-                </div>
-              )}
-            </dl>
-          </div>
-
-          {/* Document Preview */}
-          {document.content && (
-            <div className="card mt-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-primary flex items-center">
-                  <Image className="h-5 w-5 mr-2" />
-                  Document Preview
-                </h3>
-              </div>
-              
-              <div className="bg-gray-50 dark:bg-slate-800 rounded-lg p-4 max-h-96 overflow-auto">
-                {document.mime_type?.startsWith('image/') ? (
-                  <img 
-                    src={`data:${document.mime_type};base64,${document.content}`}
-                    alt={document.filename}
-                    className="max-w-full h-auto rounded border"
-                  />
-                ) : (
-                  <div className="flex items-center justify-center h-32 text-gray-500">
-                    <FileText className="h-8 w-8 mr-2" />
-                    <span>Preview not available for {document.mime_type}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Enhanced Extracted Data Display */}
-          {document.latest_extraction && (
-            <div className="card mt-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-primary flex items-center">
-                  <Tag className="h-5 w-5 mr-2" />
-                  Extracted Data
-                </h3>
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => setShowRawData(!showRawData)}
-                    className="text-sm px-3 py-1 bg-gray-100 dark:bg-slate-700 rounded-md hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
-                  >
-                    {showRawData ? 'Formatted View' : 'Raw JSON'}
-                  </button>
-                </div>
-              </div>
-              
-              {showRawData ? (
-                <pre className="bg-gray-50 dark:bg-slate-800 p-4 rounded-lg text-xs overflow-auto max-h-96 border">
-                  {JSON.stringify(document.latest_extraction, null, 2)}
-                </pre>
-              ) : (
-              <div className="space-y-3">
-                {Object.entries(document.latest_extraction).map(([field, data]) => (
-                    <div key={field} className="border border-gray-200 dark:border-slate-600 rounded-lg p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center space-x-2">
-                          <label className="font-medium text-gray-900 dark:text-white text-sm">{field}</label>
-                          {data.type_hint && (
-                            <span className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full">
-                              {data.type_hint}
-                            </span>
-                          )}
-                        </div>
-                    {data.confidence && (
-                          <span className={`text-xs px-2 py-1 rounded-full ${
-                            data.confidence >= 0.9 ? 'text-green-600 bg-green-50 dark:bg-green-900/20' :
-                            data.confidence >= 0.7 ? 'text-yellow-600 bg-yellow-50 dark:bg-yellow-900/20' :
-                            'text-red-600 bg-red-50 dark:bg-red-900/20'
-                          }`}>
-                            {(data.confidence * 100).toFixed(1)}%
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-sm text-gray-700 dark:text-gray-300">
-                        {typeof data.value === 'object' ? (
-                          <pre className="bg-gray-50 dark:bg-slate-800 p-2 rounded text-xs overflow-auto max-h-24 break-all">
-                            {JSON.stringify(data.value, null, 2)}
-                          </pre>
-                        ) : (
-                          <div className="p-2 bg-gray-50 dark:bg-slate-800 rounded min-h-[1.5rem] flex items-center break-all">
-                            {String(data.value) || <span className="text-gray-400 italic">No value</span>}
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{document.filename}</h1>
+              <p className="mt-2 text-gray-600 dark:text-slate-400">
+                {document.pipeline_custom_doc_type_name
+                  ? `Custom Type: ${document.pipeline_custom_doc_type_name}`
+                  : `Document Type: ${document.document_type}`
+                }
+              </p>
                           </div>
-                        )}
+            <StatusBadge status={document.state} />
                       </div>
                   </div>
-                ))}
+
+        {/* Tabs */}
+        <div className="mb-8">
+          <div className="border-b border-gray-200 dark:border-slate-700">
+            <nav className="-mb-px flex space-x-8">
+              {[
+                { id: 'overview', name: 'Overview', icon: Eye },
+                { id: 'pipeline', name: 'Pipeline', icon: Play },
+                { id: 'hil', name: 'HIL Review', icon: User },
+                { id: 'debug', name: 'Debug', icon: Settings }
+              ].map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
+                      activeTab === tab.id
+                        ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-slate-400 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span>{tab.name}</span>
+                  </button>
+                );
+              })}
+            </nav>
               </div>
-              )}
+        </div>
+
+        {/* Tab Content */}
+        <div className="tab-content">
+          {activeTab === 'overview' && renderOverviewTab()}
+          {activeTab === 'pipeline' && renderPipelineTab()}
+          {activeTab === 'hil' && renderHilReviewTab()}
+          {activeTab === 'debug' && (
+            <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-600 p-6">
+              <p className="text-gray-600 dark:text-slate-400">Debug information coming soon...</p>
             </div>
           )}
         </div>

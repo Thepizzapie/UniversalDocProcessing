@@ -10,8 +10,9 @@ const DocumentUpload = () => {
   const [error, setError] = useState('');
   
   // Document type selection
-  const [documentType, setDocumentType] = useState('UNKNOWN');
+  const [documentType, setDocumentType] = useState('');
   const [documentTypes, setDocumentTypes] = useState([]);
+  const [selectedCustomName, setSelectedCustomName] = useState('');
   
   // File upload state
   const [selectedFile, setSelectedFile] = useState(null);
@@ -31,8 +32,13 @@ const DocumentUpload = () => {
 
   const loadDocumentTypes = async () => {
     try {
-      const response = await apiService.getDocTypes();
-      setDocumentTypes(response.data || []);
+      console.log('DocumentUpload: Loading custom document types...');
+      // Use new custom-pipelines API to get tenant-specific custom types
+      const response = await apiService.getCustomDocTypes();
+      const customTypes = response.data || [];
+      console.log('DocumentUpload: Loaded custom types:', customTypes.map(ct => ({ name: ct.name, schemaFields: Object.keys(ct.output_schema || {}).length })));
+
+      setDocumentTypes(customTypes);
     } catch (err) {
       console.error('Failed to load document types:', err);
       // Fallback to empty array if API fails
@@ -71,12 +77,29 @@ const DocumentUpload = () => {
       setError('Please select a file');
       return;
     }
+    if (!documentType && !selectedCustomName) {
+      setError('Please select a document type');
+      return;
+    }
 
     setLoading(true);
     setError('');
 
     try {
-      const response = await apiService.uploadDocument(selectedFile, selectedFile.type, documentType);
+      const customDocTypeName = selectedCustomName || documentType;
+      console.log('DocumentUpload: Uploading with params:', {
+        fileName: selectedFile.name,
+        fileType: selectedFile.type,
+        documentType: 'UNKNOWN',
+        customDocTypeName
+      });
+
+      const response = await apiService.uploadDocument(
+        selectedFile,
+        selectedFile.type,
+        'UNKNOWN',
+        customDocTypeName
+      );
       console.log('Upload response:', response.data);
       
       // Navigate to document detail page
@@ -93,15 +116,29 @@ const DocumentUpload = () => {
       setError('Please fill in all fields');
       return;
     }
+    if (!documentType && !selectedCustomName) {
+      setError('Please select a document type');
+      return;
+    }
 
     setLoading(true);
     setError('');
 
     try {
+      const customDocTypeName = selectedCustomName || documentType;
       const requestData = {
         ...urlData,
-        document_type: documentType
+        document_type: 'UNKNOWN',
+        custom_doc_type_name: customDocTypeName
       };
+
+      console.log('DocumentUpload: URL upload with params:', {
+        url: urlData.url,
+        filename: urlData.filename,
+        mimeType: urlData.mime_type,
+        customDocTypeName
+      });
+
       const response = await apiService.ingestDocument(requestData);
       console.log('Ingest response:', response.data);
       
@@ -181,33 +218,47 @@ const DocumentUpload = () => {
             Select the type of document to enable specialized processing and validation
           </p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {/* Add Unknown option first */}
-            <button
-              onClick={() => setDocumentType('UNKNOWN')}
-              className={`p-3 rounded-lg border text-left transition-colors ${
-                documentType === 'UNKNOWN'
-                  ? 'border-accent-500 bg-accent-50 dark:bg-accent-900 text-accent-900 dark:text-accent-100'
-                  : 'border-primary-200 dark:border-primary-700 hover:border-primary-300 dark:hover:border-primary-600 hover:bg-primary-50 dark:hover:bg-primary-700'
-              }`}
-            >
-              <div className="font-medium text-sm">Unknown</div>
-              <div className="text-xs text-muted">Auto-detect type</div>
-            </button>
-            {/* Dynamic document types */}
-            {documentTypes.map((type) => (
-              <button
-                key={type.id}
-                onClick={() => setDocumentType(type.name)}
-                className={`p-3 rounded-lg border text-left transition-colors ${
-                  documentType === type.name
-                    ? 'border-accent-500 bg-accent-50 dark:bg-accent-900 text-accent-900 dark:text-accent-100'
-                    : 'border-primary-200 dark:border-primary-700 hover:border-primary-300 dark:hover:border-primary-600 hover:bg-primary-50 dark:hover:bg-primary-700'
-                }`}
-              >
-                <div className="font-medium text-sm">{type.name}</div>
-                <div className="text-xs text-muted">{type.description || 'Custom document type'}</div>
-              </button>
-            ))}
+      {documentTypes.map((type) => {
+        const schemaFields = Object.keys(type.output_schema || {});
+        const pipelineSteps = type.pipeline_config?.steps || [];
+        const hasDualSchema = type.output_schema && Object.values(type.output_schema).some(field =>
+          field.type === 'array' && field.items && typeof field.items === 'object'
+        );
+
+        return (
+          <button
+            key={type.id}
+            onClick={() => {
+              console.log('DocumentUpload: Selected custom type:', type.name, {
+                schemaFields: schemaFields.length,
+                pipelineSteps: pipelineSteps.length,
+                hasDualSchema
+              });
+              setDocumentType(type.name);
+              setSelectedCustomName(type.name);
+            }}
+            className={`p-4 rounded-lg border text-left transition-colors ${
+              selectedCustomName === type.name
+                ? 'border-accent-500 bg-accent-50 dark:bg-accent-900 text-accent-900 dark:text-accent-100'
+                : 'border-primary-200 dark:border-primary-700 hover:border-primary-300 dark:hover:border-primary-600 hover:bg-primary-50 dark:hover:bg-primary-700'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="font-medium text-sm">{type.name}</div>
+              {hasDualSchema && (
+                <span className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded-full">
+                  Dual Schema
+                </span>
+              )}
+            </div>
+            <div className="text-xs text-muted mb-2">{type.description || 'Custom document type'}</div>
+            <div className="flex items-center justify-between text-xs text-gray-500">
+              <span>{schemaFields.length} fields</span>
+              <span>{pipelineSteps.length} steps</span>
+            </div>
+          </button>
+        );
+      })}
           </div>
         </div>
       </div>

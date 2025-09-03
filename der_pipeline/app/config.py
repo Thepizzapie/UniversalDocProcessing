@@ -70,6 +70,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"  # Allow extra fields from environment variables
 
 
 # Global settings instance

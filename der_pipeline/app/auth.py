@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta
 from functools import wraps
+from inspect import iscoroutinefunction
 from typing import Any
 
 import jwt
@@ -134,32 +135,58 @@ def get_current_active_user(current_user: User = Depends(get_current_user)) -> U
 
 
 def requires_role(*allowed_roles: str):
-    """Decorator to require specific user roles."""
+    """Decorator to require specific user roles, supporting async handlers."""
 
     def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            # Find the current_user in the function arguments
-            current_user = None
-            for key, value in kwargs.items():
-                if isinstance(value, User):
-                    current_user = value
-                    break
+        if iscoroutinefunction(func):
+            @wraps(func)
+            async def async_wrapper(*args, **kwargs):
+                # Find the current_user in the function arguments
+                current_user = None
+                for _, value in kwargs.items():
+                    if isinstance(value, User):
+                        current_user = value
+                        break
 
-            if current_user is None:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required"
-                )
+                if current_user is None:
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Authentication required",
+                    )
 
-            if current_user.role not in allowed_roles:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Role '{current_user.role}' not authorized. Required: {allowed_roles}",
-                )
+                if current_user.role not in allowed_roles:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=f"Role '{current_user.role}' not authorized. Required: {allowed_roles}",
+                    )
 
-            return func(*args, **kwargs)
+                return await func(*args, **kwargs)
 
-        return wrapper
+            return async_wrapper
+        else:
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                current_user = None
+                for _, value in kwargs.items():
+                    if isinstance(value, User):
+                        current_user = value
+                        break
+
+                if current_user is None:
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Authentication required",
+                    )
+
+                if current_user.role not in allowed_roles:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=f"Role '{current_user.role}' not authorized. Required: {allowed_roles}",
+                    )
+
+                return func(*args, **kwargs)
+
+            return wrapper
 
     return decorator
 

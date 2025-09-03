@@ -4,7 +4,7 @@
 
 @layer base {
   html {
-    font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif;
   }
 }
 
@@ -47,6 +47,33 @@
     @apply bg-primary-50 dark:bg-primary-700 rounded-xl shadow-sm border border-primary-200 dark:border-primary-600 p-6 transition-colors;
   }
   
+  /* Landing helpers */
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary-700 via-accent-600 to-primary-500 dark:from-white dark:via-accent-300 dark:to-primary-200;
+  }
+  .glass {
+    @apply backdrop-blur-md bg-white/60 dark:bg-white/5 border border-white/40 dark:border-white/10 shadow-lg;
+  }
+  .badge {
+    @apply inline-flex items-center rounded-full px-3 py-1 text-xs font-medium glass text-primary-800 dark:text-primary-100;
+  }
+  .badge-muted {
+    @apply inline-flex items-center rounded-full px-3 py-1 text-xs font-medium bg-primary-100/70 dark:bg-white/10 text-primary-800 dark:text-primary-100 border border-white/20;
+  }
+  
+
+@layer utilities {
+  @keyframes float {
+    0%, 100% { transform: translateY(0) translateX(0); }
+    50% { transform: translateY(-12px) translateX(6px); }
+  }
+  .animate-float {
+    animation: float 12s ease-in-out infinite;
+  }
+  .animate-float-slow {
+    animation: float 18s ease-in-out infinite;
+  }
+}
   .input {
     @apply w-full px-3 py-2 border border-primary-300 dark:border-primary-600 rounded-lg bg-white dark:bg-primary-700 text-primary-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500 transition-colors;
   }

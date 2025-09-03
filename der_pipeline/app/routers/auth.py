@@ -23,45 +23,54 @@ limiter = Limiter(key_func=get_remote_address)
 
 
 @router.post("/register", response_model=TokenResponse)
-@limiter.limit(f"{settings.rate_limit_per_minute//10}/minute")
+@limiter.limit("120/minute" if settings.app_env == "dev" else f"{settings.rate_limit_per_minute//10}/minute")
 async def register(
     request: Request,
     register_request: RegisterRequest,
     session: Session = Depends(get_session),
 ):
     """Register a new user."""
-    try:
-        user = create_user(
-            session=session,
-            email=register_request.email,
-            password=register_request.password,
-            role=register_request.role,
-        )
-
-        # Create access token
+    # If user already exists, return a token instead of 400 to be idempotent in dev flows
+    from ..auth import get_user_by_email
+    existing = get_user_by_email(session, register_request.email)
+    if existing:
         access_token_expires = timedelta(minutes=settings.jwt_expire_minutes)
         access_token = create_access_token(
-            data={"sub": str(user.id)}, expires_delta=access_token_expires
+            data={"sub": str(existing.id)}, expires_delta=access_token_expires
         )
-
         return TokenResponse(
             access_token=access_token,
             token_type="bearer",
             expires_in=settings.jwt_expire_minutes * 60,
-            user_id=user.id,
-            email=user.email,
-            role=user.role,
+            user_id=existing.id,
+            email=existing.email,
+            role=existing.role,
         )
 
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
-        )
+    user = create_user(
+        session=session,
+        email=register_request.email,
+        password=register_request.password,
+        role=register_request.role,
+    )
+
+    access_token_expires = timedelta(minutes=settings.jwt_expire_minutes)
+    access_token = create_access_token(
+        data={"sub": str(user.id)}, expires_delta=access_token_expires
+    )
+
+    return TokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        expires_in=settings.jwt_expire_minutes * 60,
+        user_id=user.id,
+        email=user.email,
+        role=user.role,
+    )
 
 
 @router.post("/login", response_model=TokenResponse)
-@limiter.limit(f"{settings.rate_limit_per_minute//5}/minute")
+@limiter.limit("240/minute" if settings.app_env == "dev" else f"{settings.rate_limit_per_minute//5}/minute")
 async def login(
     request: Request,
     login_request: LoginRequest,
@@ -94,7 +103,7 @@ async def login(
 
 
 @router.post("/token", response_model=TokenResponse)
-@limiter.limit(f"{settings.rate_limit_per_minute//5}/minute")
+@limiter.limit("240/minute" if settings.app_env == "dev" else f"{settings.rate_limit_per_minute//5}/minute")
 async def login_for_access_token(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),

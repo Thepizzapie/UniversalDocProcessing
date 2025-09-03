@@ -52,3 +52,60 @@ async def test_ai_extraction(request: dict = None):
         }
     except Exception as e:
         return {"status": "error", "error": str(e)}
+
+
+@router.post("/ai-health/generate-schema")
+async def generate_ai_schema(request: dict):
+    """Generate a JSON schema using AI based on document description."""
+    if not crewai_service.is_enabled:
+        return {
+            "status": "disabled",
+            "message": "CrewAI service is not enabled",
+            "schema": None
+        }
+
+    # Validate request
+    if not request or "document_description" not in request:
+        return {
+            "status": "error",
+            "message": "Missing document_description in request",
+            "schema": None
+        }
+
+    document_description = request["document_description"].strip()
+    document_type = request.get("document_type", "custom")
+
+    if not document_description:
+        return {
+            "status": "error",
+            "message": "Document description cannot be empty",
+            "schema": None
+        }
+
+    try:
+        # Generate schema using AI
+        generated_schema = crewai_service.generate_document_schema(
+            document_description=document_description,
+            document_type=document_type
+        )
+
+        if generated_schema:
+            return {
+                "status": "success",
+                "message": f"Successfully generated schema for {document_type}",
+                "schema": generated_schema,
+                "field_count": len(generated_schema.get("properties", {}))
+            }
+        else:
+            return {
+                "status": "error",
+                "message": "AI schema generation failed - no schema returned",
+                "schema": None
+            }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"AI schema generation failed: {str(e)}",
+            "schema": None
+        }

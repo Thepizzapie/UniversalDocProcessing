@@ -12,7 +12,8 @@ from ..db import get_session_sync
 from ..enums import PipelineState
 from ..models import Document
 from ..schemas import IngestRequest, IngestResponse
-from ..services.extraction import extract_document_fields
+from ..services.extraction import extract_document_fields, ExtractionService
+from ..services.pipeline_runner import PipelineRunner
 from ..utils.validation import validate_document_content
 from ..utils.tenant import get_tenant_id
 
@@ -39,11 +40,29 @@ def ingest_document(
         if not validate_document_content(ingest_request.content, ingest_request.mime_type):
             raise HTTPException(status_code=400, detail="Invalid or unsupported document content")
 
+    # Enforce selected type: require either a valid enum (not UNKNOWN) or a custom_doc_type_name
+    from ..enums import DocumentType as _DT
+    enum_doc_type = ingest_request.document_type
+    if (enum_doc_type == _DT.UNKNOWN) and not ingest_request.custom_doc_type_name:
+        raise HTTPException(status_code=400, detail="document_type or custom_doc_type_name is required")
+    # If custom_doc_type_name provided and enum is UNKNOWN, derive enum from the name for basic bucketing
+    if ingest_request.custom_doc_type_name and enum_doc_type == _DT.UNKNOWN:
+        lowered = ingest_request.custom_doc_type_name.lower()
+        if "receipt" in lowered or "purchase" in lowered:
+            enum_doc_type = _DT.RECEIPT
+        elif "invoice" in lowered:
+            enum_doc_type = _DT.INVOICE
+        elif any(k in lowered for k in ["entry", "exit", "log"]):
+            enum_doc_type = _DT.ENTRY_EXIT_LOG
+        else:
+            enum_doc_type = _DT.RECEIPT  # default bucket
+
     # Create document record
+    # If custom doc type name provided, and DocumentType is UNKNOWN, keep enum but we will force custom path later
     document = Document(
         filename=ingest_request.filename,
         mime_type=ingest_request.mime_type,
-        document_type=ingest_request.document_type,
+        document_type=enum_doc_type,
         source_uri=ingest_request.url,
         content=ingest_request.content,  # ADD THE CONTENT!
         tenant_id=tenant_id,
@@ -63,8 +82,24 @@ def ingest_document(
         session.refresh(document)
 
     try:
-        # Extract data from document
-        extracted_data = extract_document_fields(document.id)
+        # If the request specifies a custom doc type name, use the forced custom extraction path
+        if ingest_request.custom_doc_type_name:
+            # Run the full custom pipeline if steps exist; falls back to just forced extraction
+            PipelineRunner.run_pipeline(document.id, ingest_request.custom_doc_type_name)
+            # fetch latest extraction for response
+            extracted_data = ExtractionService.extract_forced_custom(document, ingest_request.custom_doc_type_name)
+        else:
+            # Extract data from document
+            extracted_data = extract_document_fields(document.id)
+
+        # Attach extraction_mode if present (for quick diagnostics in UI)
+        extracted_root = extracted_data.root
+        try:
+            if "_extraction_mode" in extracted_root:
+                mode = extracted_root.get("_extraction_mode")
+                print(f"DEBUG: extraction_mode={getattr(mode, 'value', mode)}")
+        except Exception:
+            pass
 
         return IngestResponse(
             document_id=document.id,
@@ -90,6 +125,7 @@ async def ingest_uploaded_file(
     file: UploadFile = File(...),
     mime_type: str | None = Form(None),
     document_type: str | None = Form(None),
+    custom_doc_type_name: str | None = Form(None),
     tenant_id: int = Depends(get_tenant_id),
     # current_user=Depends(get_current_active_user),  # Temporarily disabled for testing
 ):
@@ -131,7 +167,20 @@ async def ingest_uploaded_file(
             print(f"DEBUG: Successfully converted to enum: {doc_type}")
         except ValueError as e:
             print(f"DEBUG: Failed to convert '{document_type}' to DocumentType enum: {e}")
-            doc_type = DocumentType.UNKNOWN
+            # Try fuzzy mapping from free-text to known enums
+            lowered = document_type.lower()
+            if "receipt" in lowered:
+                doc_type = DocumentType.RECEIPT
+                print("DEBUG: Fuzzy-mapped to enum: RECEIPT")
+            elif "invoice" in lowered:
+                doc_type = DocumentType.INVOICE
+                print("DEBUG: Fuzzy-mapped to enum: INVOICE")
+            elif "entry" in lowered or "exit" in lowered or "log" in lowered:
+                doc_type = DocumentType.ENTRY_EXIT_LOG
+                print("DEBUG: Fuzzy-mapped to enum: ENTRY_EXIT_LOG")
+            else:
+                doc_type = DocumentType.UNKNOWN
+                print("DEBUG: Could not fuzzy-map document_type; using UNKNOWN")
     else:
         print("DEBUG: No document_type provided, defaulting to UNKNOWN")
 
@@ -142,6 +191,60 @@ async def ingest_uploaded_file(
             mime_type=mime_type,
             content=actual_content,
             document_type=doc_type,
+            custom_doc_type_name=custom_doc_type_name,
         ),
         tenant_id=tenant_id,
     )
+
+
+@router.post("/re-extract/{document_id}", response_model=IngestResponse)
+@limiter.limit(f"{settings.rate_limit_per_minute}/minute")
+def re_extract_document(
+    request: Request,
+    document_id: int,
+    custom_doc_type_name: str = Form(None),
+    tenant_id: int = Depends(get_tenant_id),
+):
+    """Re-extract data from an existing document using a custom doc type."""
+
+    # Get the existing document
+    with get_session_sync() as session:
+        document = session.get(Document, document_id)
+        if not document:
+            raise HTTPException(status_code=404, detail=f"Document {document_id} not found")
+        if document.tenant_id != tenant_id:
+            raise HTTPException(status_code=403, detail="Document belongs to different tenant")
+
+    try:
+        # If custom doc type name provided, use forced custom extraction
+        if custom_doc_type_name:
+            # Run the full custom pipeline if steps exist; falls back to just forced extraction
+            PipelineRunner.run_pipeline(document.id, custom_doc_type_name)
+            # Fetch latest extraction for response
+            extracted_data = ExtractionService.extract_forced_custom(document, custom_doc_type_name)
+        else:
+            # Extract data from document using default method
+            extracted_data = extract_document_fields(document.id)
+
+        # Update document state
+        with get_session_sync() as session:
+            doc = session.get(Document, document.id)
+            if doc:
+                doc.state = PipelineState.HIL_REQUIRED
+                session.commit()
+
+        return IngestResponse(
+            document_id=document.id,
+            state=PipelineState.HIL_REQUIRED,
+            extracted=extracted_data.root,
+        )
+
+    except Exception as e:
+        # Update document state to failed
+        with get_session_sync() as session:
+            doc = session.get(Document, document.id)
+            if doc:
+                doc.state = PipelineState.FAILED
+                session.commit()
+
+        raise HTTPException(status_code=500, detail=f"Re-extraction failed: {str(e)}")

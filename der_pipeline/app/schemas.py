@@ -1,7 +1,7 @@
 """Pydantic DTOs for API requests and responses."""
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field, RootModel
 
@@ -13,14 +13,14 @@ class ExtractedField(BaseModel):
     """Individual extracted field with metadata."""
 
     value: Any
-    confidence: float | None = None
-    type_hint: str | None = None
+    confidence: Optional[float] = None
+    type_hint: Optional[str] = None
 
 
 class CorrectedField(ExtractedField):
     """Corrected field with correction reason."""
 
-    correction_reason: str | None = None
+    correction_reason: Optional[str] = None
 
 
 class FetchedRecord(BaseModel):
@@ -34,8 +34,8 @@ class ReconcileDiff(BaseModel):
     """Individual field reconciliation result."""
 
     field: str
-    extracted_value: Any | None = None
-    fetched_value: Any | None = None
+    extracted_value: Optional[Any] = None
+    fetched_value: Optional[Any] = None
     match_score: float
     status: ReconcileStatus
 
@@ -55,8 +55,9 @@ class IngestRequest(BaseModel):
     filename: str
     mime_type: str
     document_type: DocumentType = DocumentType.UNKNOWN
-    content: str | None = Field(None, description="Base64 encoded content")
-    url: str | None = Field(None, description="URL to fetch content from")
+    custom_doc_type_name: Optional[str] = Field(None, description="Exact name of a custom doc type to force-use for extraction")
+    content: Optional[str] = Field(None, description="Base64 encoded content")
+    url: Optional[str] = Field(None, description="URL to fetch content from")
 
 
 class IngestResponse(BaseModel):
@@ -72,9 +73,9 @@ class HilResponse(BaseModel):
 
     document_id: int
     current_state: PipelineState
-    extracted: dict[str, ExtractedField] | None = None
-    extracted_full: dict[str, ExtractedField] | None = None
-    corrected: dict[str, CorrectedField] | None = None
+    extracted: Optional[dict[str, ExtractedField]] = None
+    extracted_full: Optional[dict[str, ExtractedField]] = None
+    corrected: Optional[dict[str, CorrectedField]] = None
     confidence_threshold: float = 0.8
 
 
@@ -83,7 +84,7 @@ class HilUpdateRequest(BaseModel):
 
     corrections: dict[str, CorrectedField]
     reviewer: str
-    notes: str | None = None
+    notes: Optional[str] = None
 
 
 class HilUpdateResponse(BaseModel):
@@ -97,7 +98,7 @@ class HilUpdateResponse(BaseModel):
 class FetchRequest(BaseModel):
     """Request to fetch comparator data."""
 
-    targets: list[str] | None = Field(None, description="External sources to query")
+    targets: Optional[list[str]] = Field(None, description="External sources to query")
 
 
 class FetchResponse(BaseModel):
@@ -113,7 +114,7 @@ class ReconcileRequest(BaseModel):
     """Request to reconcile extracted vs fetched data."""
 
     strategy: ReconcileStrategy = ReconcileStrategy.LOOSE
-    thresholds: dict[str, float] | None = Field(
+    thresholds: Optional[dict[str, float]] = Field(
         default_factory=lambda: {"exact": 1.0, "fuzzy": 0.85}
     )
 
@@ -133,7 +134,7 @@ class FinalizeRequest(BaseModel):
 
     decision: Decision
     decider: str
-    notes: str | None = None
+    notes: Optional[str] = None
 
 
 class FinalizeResponse(BaseModel):
@@ -152,12 +153,15 @@ class DocumentReport(BaseModel):
     filename: str
     state: PipelineState
     uploaded_at: datetime
-    latest_extraction: dict[str, ExtractedField] | None = None
-    latest_correction: dict[str, CorrectedField] | None = None
-    latest_fetch: dict[str, FetchedRecord] | None = None
-    latest_reconciliation: ReconcileResponse | None = None
-    final_decision: FinalizeResponse | None = None
+    latest_extraction: Optional[dict[str, ExtractedField]] = None
+    latest_correction: Optional[dict[str, CorrectedField]] = None
+    latest_fetch: Optional[dict[str, FetchedRecord]] = None
+    latest_reconciliation: Optional[ReconcileResponse] = None
+    final_decision: Optional[FinalizeResponse] = None
     audit_trail: list[dict[str, Any]]
+    # Optional: Authoritative pipeline details to avoid client-side guessing
+    pipeline_step_types: Optional[list[str]] = None
+    pipeline_custom_doc_type_name: Optional[str] = None
 
 
 # Document Type Specific Schemas
@@ -166,45 +170,45 @@ class InvoiceData(BaseModel):
 
     invoice_number: str
     vendor_name: str
-    vendor_address: str | None = None
-    vendor_tax_id: str | None = None
+    vendor_address: Optional[str] = None
+    vendor_tax_id: Optional[str] = None
     invoice_date: str
-    due_date: str | None = None
+    due_date: Optional[str] = None
     subtotal: float
-    tax_amount: float | None = None
+    tax_amount: Optional[float] = None
     total_amount: float
     currency: str = "USD"
     line_items: list[dict[str, Any]] = Field(default_factory=list)
-    payment_terms: str | None = None
+    payment_terms: Optional[str] = None
 
 
 class ReceiptData(BaseModel):
     """Receipt specific data schema."""
 
     merchant_name: str
-    merchant_address: str | None = None
+    merchant_address: Optional[str] = None
     transaction_date: str
-    transaction_time: str | None = None
+    transaction_time: Optional[str] = None
     total_amount: float
-    tax_amount: float | None = None
+    tax_amount: Optional[float] = None
     currency: str = "USD"
-    payment_method: str | None = None
+    payment_method: Optional[str] = None
     items: list[dict[str, Any]] = Field(default_factory=list)
-    receipt_number: str | None = None
+    receipt_number: Optional[str] = None
 
 
 class EntryExitLogData(BaseModel):
     """Entry/Exit log specific data schema."""
 
     person_name: str
-    person_id: str | None = None
-    entry_time: str | None = None
-    exit_time: str | None = None
+    person_id: Optional[str] = None
+    entry_time: Optional[str] = None
+    exit_time: Optional[str] = None
     location: str
-    purpose: str | None = None
-    authorized_by: str | None = None
-    badge_number: str | None = None
-    vehicle_info: str | None = None
+    purpose: Optional[str] = None
+    authorized_by: Optional[str] = None
+    badge_number: Optional[str] = None
+    vehicle_info: Optional[str] = None
 
 
 # RAG System Schemas
@@ -213,7 +217,7 @@ class RagDocumentCreate(BaseModel):
 
     document_type: DocumentType
     reference_data: dict[str, Any]
-    description: str | None = None
+    description: Optional[str] = None
     tags: list[str] = Field(default_factory=list)
 
 
@@ -223,7 +227,7 @@ class RagDocumentResponse(BaseModel):
     id: int
     document_type: DocumentType
     reference_data: dict[str, Any]
-    description: str | None = None
+    description: Optional[str] = None
     tags: list[str]
     created_at: datetime
     updated_at: datetime
@@ -233,7 +237,7 @@ class RagSearchRequest(BaseModel):
     """Request to search RAG documents."""
 
     query: str
-    document_type: DocumentType | None = None
+    document_type: Optional[DocumentType] = None
     limit: int = Field(default=10, le=50)
     similarity_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
 
@@ -243,7 +247,7 @@ class RagSearchResult(BaseModel):
 
     id: int
     reference_data: dict[str, Any]
-    description: str | None = None
+    description: Optional[str] = None
     similarity_score: float
     tags: list[str]
 
@@ -255,7 +259,7 @@ class DebugRequest(BaseModel):
     stage: str
     debug_type: str
     input_data: dict[str, Any]
-    context: dict[str, Any] | None = None
+    context: Optional[dict[str, Any]] = None
 
 
 class DebugResponse(BaseModel):
@@ -266,15 +270,15 @@ class DebugResponse(BaseModel):
     debug_type: str
     ai_analysis: dict[str, Any]
     recommendations: list[str]
-    confidence_score: float | None = None
+    confidence_score: Optional[float] = None
 
 
 class DebugRunRequest(BaseModel):
     """Request to perform a dry-run extraction for debugging."""
 
-    document_type_override: str | None = None
+    document_type_override: Optional[str] = None
     use_vision: bool = True
-    sample_text: str | None = None
+    sample_text: Optional[str] = None
 
 
 class DebugRunResponse(BaseModel):
@@ -282,9 +286,9 @@ class DebugRunResponse(BaseModel):
 
     used_document_type: str
     fields: dict[str, ExtractedField]
-    prompt_chars: int | None = None
-    content_chars: int | None = None
-    notes: str | None = None
+    prompt_chars: Optional[int] = None
+    content_chars: Optional[int] = None
+    notes: Optional[str] = None
 
 
 # Enhanced Document Reports
@@ -296,7 +300,7 @@ class DocumentListItem(BaseModel):
     document_type: DocumentType
     state: PipelineState
     uploaded_at: datetime
-    confidence_score: float | None = None
+    confidence_score: Optional[float] = None
 
 
 # Authentication Schemas
@@ -346,3 +350,93 @@ class ConfigResponse(BaseModel):
     crewai_enabled: bool
     rate_limit_per_minute: int
     cors_allow_origins: list[str]
+
+
+# Pipeline Configuration Schemas
+class PipelineStepConfig(BaseModel):
+    """Configuration for a single pipeline step."""
+    
+    step_type: str  # 'extraction', 'hil', 'fetch', 'reconcile', 'send'
+    name: str
+    description: Optional[str] = None
+    is_required: bool = True
+    config: dict[str, Any] = Field(default_factory=dict)
+    depends_on: list[str] = Field(default_factory=list)  # Step dependencies
+
+
+class ExtractionObjectConfig(BaseModel):
+    """Configuration for an extraction object."""
+    
+    name: str
+    object_type: str  # 'parent', 'child', 'standalone'
+    parent_object_name: Optional[str] = None
+    object_schema: dict[str, Any]
+    extraction_instructions: Optional[str] = None
+    hil_config: dict[str, Any] = Field(default_factory=dict)
+    send_config: dict[str, Any] = Field(default_factory=dict)
+
+
+class CustomPipelineConfig(BaseModel):
+    """Complete pipeline configuration for a document type."""
+    
+    name: str
+    description: Optional[str] = None
+    steps: list[PipelineStepConfig]
+    objects: list[ExtractionObjectConfig]
+    parallel_processing: bool = False
+    global_config: dict[str, Any] = Field(default_factory=dict)
+
+
+class CustomDocTypeRequest(BaseModel):
+    """Request to create/update a custom document type with pipeline."""
+    
+    name: str
+    description: Optional[str] = None
+    instructions: dict[str, Any]
+    output_schema: dict[str, Any]
+    destination_webhook: Optional[str] = None
+    pipeline_config: CustomPipelineConfig
+
+
+class CustomDocTypeResponse(BaseModel):
+    """Response for custom document type."""
+    
+    id: int
+    tenant_id: int
+    name: str
+    description: Optional[str]
+    instructions: dict[str, Any]
+    output_schema: dict[str, Any]
+    destination_webhook: Optional[str]
+    pipeline_config: dict[str, Any]
+    created_at: datetime
+    updated_at: datetime
+
+
+class PipelineTemplateResponse(BaseModel):
+    """Available pipeline templates."""
+
+    name: str
+    description: str
+    steps: list[PipelineStepConfig]
+    use_cases: list[str]
+
+
+class HilReviewRequest(BaseModel):
+    """Request to submit HIL review decisions."""
+
+    document_id: int = Field(..., description="Document being reviewed")
+    decision: Decision = Field(..., description="Overall decision: approve or reject")
+    field_reviews: list[dict[str, Any]] = Field(default_factory=list, description="Individual field review decisions")
+    overall_comments: Optional[str] = Field(None, description="Overall review comments")
+    reviewed_at: Optional[datetime] = Field(default_factory=datetime.utcnow, description="When review was completed")
+
+
+class HilReviewResponse(BaseModel):
+    """Response from HIL review submission."""
+
+    document_id: int
+    decision: Decision
+    state: PipelineState
+    reviewed_at: datetime
+    field_reviews_processed: int

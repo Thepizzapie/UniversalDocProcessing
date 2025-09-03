@@ -1,24 +1,39 @@
-import React, { useState, useEffect } from 'react';
-import { FileText, Plus, Edit, Trash2, TestTube, Save, Copy, Upload, Wand2, Code, Eye, ArrowRight, ArrowLeft, CheckCircle } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  FileText,
+  Plus,
+  Edit,
+  Trash2,
+  TestTube,
+  Save,
+  Wand2,
+  Code,
+  ArrowRight,
+  ArrowLeft,
+  Eye,
+  CheckCircle,
+  Settings,
+  Upload
+} from 'lucide-react';
 import api, { apiService } from '../services/api';
 
 const DocTypes = () => {
+  // ===== STATE MANAGEMENT =====
+  // Core state
   const [docTypes, setDocTypes] = useState([]);
-  const [templates, setTemplates] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+  const [tenantId, setTenantId] = useState(localStorage.getItem('tenantId') || '1');
+
+  // Modal and wizard state
   const [showCreateWizard, setShowCreateWizard] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [editModalTab, setEditModalTab] = useState('basic');
+  const [isEditing, setIsEditing] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
   const [editingId, setEditingId] = useState(null);
-  const [tenantId, setTenantId] = useState(localStorage.getItem('tenantId') || '1');
-  const [message, setMessage] = useState('');
-  const [loading, setLoading] = useState(false);
 
-  // UI mode toggles
-  const [schemaMode, setSchemaMode] = useState('builder');
-  const [showAIGenerator, setShowAIGenerator] = useState(false);
-  const [showSchemaEditor, setShowSchemaEditor] = useState(false);
-
-  // Form state
+  // Form and schema state
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -31,114 +46,291 @@ const DocTypes = () => {
       required_review_fields: [],
       auto_approve_threshold: 0.85,
       require_manual_review: false
-    }
+    },
+    pipeline_config: {
+      name: '',
+      description: '',
+      steps: [],
+      objects: [],
+      parallel_processing: false,
+      global_config: {}
+    },
+    destination_webhook: ''
   });
 
-  // Schema builder state
-  const [schemaFields, setSchemaFields] = useState([]);
-  const [expandedObjects, setExpandedObjects] = useState(new Set()); // Track which objects are expanded for editing
-  const [arrayItemTypes, setArrayItemTypes] = useState({}); // Track array item types
-
-  // Test extraction state
-  const [testFile, setTestFile] = useState(null);
-  const [testResults, setTestResults] = useState(null);
-  const [testing, setTesting] = useState(false);
-  const [showTestOutput, setShowTestOutput] = useState(false);
-
-  // AI Generator state
+  // UI state
+  const [schemaMode, setSchemaMode] = useState('builder');
   const [aiPrompt, setAiPrompt] = useState('');
   const [generatingSchema, setGeneratingSchema] = useState(false);
+  const [schemaFields, setSchemaFields] = useState([]);
+  const [expandedObjects, setExpandedObjects] = useState(new Set());
+  const [selectedTemplate, setSelectedTemplate] = useState('');
+  const [packageMode, setPackageMode] = useState('single');
+  const [showPipelineBuilder, setShowPipelineBuilder] = useState(false);
 
-  useEffect(() => {
-    loadDocTypes();
-    loadTemplates();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Dual schema state for two-package pipelines
+  const [parentSchema, setParentSchema] = useState({});
+  const [childSchema, setChildSchema] = useState({});
+  const [parentSchemaFields, setParentSchemaFields] = useState([]);
+  const [childSchemaFields, setChildSchemaFields] = useState([]);
+  const [parentSchemaMode, setParentSchemaMode] = useState('builder');
+  const [childSchemaMode, setChildSchemaMode] = useState('builder');
+  const [parentSchemaJson, setParentSchemaJson] = useState('{}');
+  const [childSchemaJson, setChildSchemaJson] = useState('{}');
+  // Package structure & labels
+  const [childCollectionKey, setChildCollectionKey] = useState('child_entries');
+  const [singlePackageType, setSinglePackageType] = useState('object'); // 'object' | 'array'
+  const [singleCollectionKey, setSingleCollectionKey] = useState('records');
 
-  const loadDocTypes = async () => {
+  // Testing state
+  const [testing, setTesting] = useState(false);
+  const [testFile, setTestFile] = useState(null);
+  const [testResults, setTestResults] = useState(null);
+  const [showTestOutput, setShowTestOutput] = useState(false);
+
+  // ===== CONSTANTS =====
+  const pipelineTemplates = [
+    // Extract & Send (trust AI, no review)
+    {
+      key: 'extract_send',
+      name: 'Extract & Send',
+      description: 'Trust AI: extract data and send without manual review',
+      steps: [
+        { step_type: 'extraction', name: 'Extract Data', description: 'Extract structured data', is_required: true, config: {}, depends_on: [] },
+        { step_type: 'send', name: 'Send Data', description: 'Send to endpoint', is_required: true, config: {}, depends_on: [] }
+      ]
+    },
+    // Extract, Review (HIL) & Send
+    {
+      key: 'extract_review_send',
+      name: 'Extract, Review (HIL) & Send',
+      description: 'Extract, human-in-the-loop review, then send',
+      steps: [
+        { step_type: 'extraction', name: 'Extract Data', description: 'Extract structured data', is_required: true, config: {}, depends_on: [] },
+        { step_type: 'hil', name: 'Review Data', description: 'Manual review and correction', is_required: true, config: {}, depends_on: [] },
+        { step_type: 'send', name: 'Send Data', description: 'Send processed data', is_required: true, config: {}, depends_on: [] }
+      ]
+    },
+    // Parent review, send, then child review & send
+    {
+      key: 'parent_child_review_send',
+      name: 'Parent Review, Send, Child Review & Send',
+      description: 'Review parent object, send; then review child entries and send',
+      steps: [
+        { step_type: 'extraction', name: 'Extract Data', description: 'Extract structured data', is_required: true, config: {}, depends_on: [] },
+        { step_type: 'hil', name: 'Review Parent Object', description: 'Manual review of parent-level fields', is_required: true, config: { scope: 'parent' }, depends_on: [] },
+        { step_type: 'send', name: 'Send Parent Object', description: 'Send parent-level data', is_required: true, config: { scope: 'parent' }, depends_on: [] },
+        { step_type: 'hil', name: 'Review Child Entries', description: 'Manual review of child/line-item entries', is_required: true, config: { scope: 'children' }, depends_on: [] },
+        { step_type: 'send', name: 'Send Child Entries', description: 'Send reviewed child entries', is_required: true, config: { scope: 'children' }, depends_on: [] }
+      ]
+    },
+    // Coming soon: Extract, Reconcile, Review & Send
+    {
+      key: 'extract_reconcile_review_send',
+      name: 'Extract, Reconcile, Review & Send',
+      description: 'Match with external data before review and send',
+      comingSoon: true,
+      disabled: true,
+      steps: [
+        { step_type: 'extraction', name: 'Extract Data', description: 'Extract structured data', is_required: true, config: {}, depends_on: [] },
+        { step_type: 'reconcile', name: 'Reconcile', description: 'Match with external/reference data', is_required: false, config: {}, depends_on: [] },
+        { step_type: 'hil', name: 'Review Data', description: 'Manual review and correction', is_required: true, config: {}, depends_on: [] },
+        { step_type: 'send', name: 'Send Data', description: 'Send processed data', is_required: true, config: {}, depends_on: [] }
+      ]
+    },
+    // Coming soon: Custom Pipelines
+    {
+      key: 'custom_pipelines',
+      name: 'Custom Pipelines',
+      description: 'Design a fully custom pipeline (coming soon)',
+      comingSoon: true,
+      disabled: true,
+      steps: []
+    }
+  ];
+
+  // ===== UTILITY FUNCTIONS =====
+  const resetForm = () => ({
+    name: '',
+    description: '',
+    output_schema: {},
+    instructions: { prompt: '', extraction_hints: [] },
+    hil_instructions: {
+            required_review_fields: [],
+            auto_approve_threshold: 0.85,
+      require_manual_review: false
+    },
+    pipeline_config: {
+      name: '',
+      description: '',
+      steps: [],
+      objects: [],
+              parallel_processing: false,
+      global_config: {}
+    },
+    destination_webhook: ''
+  });
+
+  // ===== API FUNCTIONS =====
+  const loadDocTypes = useCallback(async () => {
+    if (!tenantId) return;
+
     try {
-      if (!tenantId) {
-        setMessage('Please set tenant ID first');
-        return;
-      }
       apiService.setTenantId(tenantId);
-      const res = await api.get('/doc-types');
+      const res = await apiService.getCustomDocTypes();
       setDocTypes(res.data || []);
     } catch (e) {
-      setMessage('Load error: ' + (e.response?.data?.detail || e.message));
+      console.error('Error loading doc types:', e);
+      setMessage('Error loading document types: ' + (e.response?.data?.detail || e.message));
     }
-  };
+  }, [tenantId]);
 
-  const loadTemplates = async () => {
+  const createDocType = async () => {
+    if (!tenantId) {
+      setMessage('Please set tenant ID first');
+      return;
+    }
+
+    // Validate based on package mode: single uses output_schema; dual validates parent/child schemas
+    const validationErrors = packageMode === 'two'
+      ? [
+          ...validateSchema(parentSchema),
+          ...validateSchema(childSchema)
+        ]
+      : validateSchema(formData.output_schema);
+    if (validationErrors.length > 0) {
+      setMessage('Schema validation errors: ' + validationErrors.join('; '));
+      return;
+    }
+
+    setLoading(true);
     try {
-      const res = await api.get('/doc-types/templates');
-      setTemplates(res.data || {});
-    } catch (e) {
-      console.error('Failed to load templates:', e);
-    }
-  };
-
-  const startWizard = (templateKey = null) => {
-    // Reset editing state - wizard is only for creating new types
-    setEditingId(null);
-    setShowEditModal(false);
-    
-    if (templateKey && templates[templateKey]) {
-      const template = templates[templateKey];
-      setFormData({
-        name: template.name,
-        description: template.description,
-        output_schema: template.output_schema,
-        instructions: template.instructions,
-        hil_instructions: template.hil_instructions
-      });
+      apiService.setTenantId(tenantId);
       
-      const fields = Object.entries(template.output_schema).map(([name, def]) => {
-        const field = {
-          id: Math.random(),
-          name,
-          type: def.type,
-          required: def.required || false,
-          description: def.description || '',
-          default: def.default || '',
-          nestedFields: [],
-          arrayItemType: 'string'
+      let payload;
+
+  if (packageMode === 'two') {
+        // For two-package pipelines, use dual schemas
+        const updatedPipelineConfig = {
+          ...formData.pipeline_config,
+          objects: [
+            {
+              name: 'parent_object',
+              object_type: 'parent',
+              parent_object_name: null,
+              object_schema: parentSchema,
+              extraction_instructions: formData.instructions?.prompt || '',
+              hil_config: formData.hil_instructions,
+              send_config: { scope: 'parent' }
+            },
+            {
+              name: 'child_entries',
+              object_type: 'children',
+              parent_object_name: 'parent_object',
+              object_schema: childSchema,
+              extraction_instructions: formData.instructions?.prompt || '',
+              hil_config: formData.hil_instructions,
+              send_config: { scope: 'children' }
+            }
+          ]
         };
 
-        // Handle nested object fields
-        if (def.type === 'object' && def.properties) {
-          field.nestedFields = Object.entries(def.properties).map(([propName, propDef]) => ({
-            id: Math.random(),
-            name: propName,
-            type: propDef.type || 'string',
-            required: propDef.required || false,
-            description: propDef.description || '',
-            default: propDef.default || ''
-          }));
-        }
+        // Do NOT send a combined schema; include only the two distinct schemas
+        // Keeping them under explicit keys avoids accidental combined-output behavior downstream
+        payload = {
+        name: formData.name,
+        description: formData.description,
+        instructions: formData.instructions,
+          output_schema: {
+            parent_schema: parentSchema,
+            child_schema: childSchema,
+            collection_key: childCollectionKey || 'child_entries'
+          },
+          destination_webhook: formData.destination_webhook || null,
+          pipeline_config: updatedPipelineConfig
+        };
+      } else {
+        // For single package pipelines, use the existing structure
+        // If user chose array type for single package, reflect that in preview output schema
+        const objectProps = (formData.output_schema?.properties) ? formData.output_schema.properties : formData.output_schema;
+        const singleOutputSchema = singlePackageType === 'array'
+          ? { [singleCollectionKey || 'records']: { type: 'array', items: { type: 'object', properties: objectProps || {} } } }
+          : formData.output_schema;
 
-        // Handle array item types
-        if (def.type === 'array' && def.items) {
-          field.arrayItemType = def.items.type || 'string';
-          if (def.items.type === 'object' && def.items.properties) {
-            field.nestedFields = Object.entries(def.items.properties).map(([propName, propDef]) => ({
-              id: Math.random(),
-              name: propName,
-              type: propDef.type || 'string',
-              required: propDef.required || false,
-              description: propDef.description || '',
-              default: propDef.default || ''
-            }));
-          }
-        }
+        payload = {
+          name: formData.name,
+          description: formData.description,
+          instructions: formData.instructions,
+          output_schema: singleOutputSchema,
+        destination_webhook: formData.destination_webhook || null,
+        pipeline_config: formData.pipeline_config
+      };
+      }
 
-        return field;
-      });
-      setSchemaFields(fields);
-      setWizardStep(2);
-    } else {
-      setWizardStep(1);
+      let response;
+      if (editingId) {
+        response = await apiService.updateCustomDocType(editingId, payload);
+        setMessage('Updated successfully');
+      } else {
+        response = await apiService.createCustomDocType(payload);
+        setMessage('Created successfully');
+      }
+
+      loadDocTypes();
+
+      // Always reset the form after saving (both create and edit)
+        setTimeout(() => {
+          setFormData(resetForm());
+          setSchemaFields([]);
+        setPackageMode('single');
+        closeModals();
+        }, 1500);
+    } catch (e) {
+      setMessage('Error: ' + (e.response?.data?.detail || e.message));
+    } finally {
+      setLoading(false);
     }
-    setShowCreateWizard(true);
+  };
+
+    const deleteDocType = async (id) => {
+    if (!window.confirm('Delete this document type?')) return;
+
+    try {
+      apiService.setTenantId(tenantId);
+      await apiService.deleteCustomDocType(id);
+      setMessage('Deleted successfully');
+      loadDocTypes();
+    } catch (e) {
+      setMessage('Delete error: ' + (e.response?.data?.detail || e.message));
+    }
+  };
+
+  // ===== SCHEMA FUNCTIONS =====
+  // Analyze prompt for dual-package indicators
+  const analyzePromptForDualPackage = (prompt) => {
+    const dualPackageIndicators = [
+      // Header + Table patterns
+      /header.*(?:and|then|followed by).*table|row/i,
+      /table.*(?:and|then|followed by).*header|detail/i,
+
+      // Parent + Child patterns
+      /parent.*(?:and|then|followed by).*child/i,
+      /child.*(?:and|then|followed by).*parent/i,
+
+      // First/Then patterns with different data types
+      /first.*extract.*(?:then|followed by).*extract/i,
+      /extract.*header|detail.*(?:and|then).*extract.*table|row/i,
+
+      // Multiple extraction patterns
+      /(?:extract|get|pull).*header|detail.*(?:and|then|also).*extract|get|pull.*table|row/i,
+      /table.*(?:with|containing).*row|entry|record/i,
+
+      // Specific dual-package keywords
+      /\b(header|detail|summary|info).*\b(table|row|entry|record|item)\b/i,
+      /\b(table|row|entry|record|item).*\b(header|detail|summary|info)\b/i
+    ];
+
+    return dualPackageIndicators.some(pattern => pattern.test(prompt));
   };
 
   const generateSchemaWithAI = async () => {
@@ -148,14 +340,303 @@ const DocTypes = () => {
     }
 
     setGeneratingSchema(true);
+
+    // Check for dual-package requirements in prompt
+    const promptRequiresDualPackage = analyzePromptForDualPackage(aiPrompt.toLowerCase());
+
+    if (promptRequiresDualPackage && packageMode === 'single') {
+      // Automatically switch to dual-package mode for better results
+      console.log('Detected dual-package requirements in prompt, auto-switching to dual mode');
+      setPackageMode('two');
+
+      // Auto-select the Parent/Child pipeline for dual-package processing
+      const parentChildTemplate = pipelineTemplates.find(t => t.key === 'parent_child_review_send');
+      if (parentChildTemplate) {
+        console.log('Found Parent/Child template:', parentChildTemplate.name);
+        setSelectedTemplate(parentChildTemplate.name);
+        setFormData(prev => {
+          console.log('Updating formData with Parent/Child pipeline config');
+          return {
+            ...prev,
+            pipeline_config: {
+              ...prev.pipeline_config,
+              steps: parentChildTemplate.steps,
+              objects: [], // Will be populated when schema is generated
+              parallel_processing: false
+              // Note: We don't update name/description here as those are for the document type, not the pipeline
+            }
+          };
+        });
+        console.log('Auto-selected Parent/Child pipeline template:', parentChildTemplate.name);
+      } else {
+        console.error('Parent/Child template not found!');
+      }
+
+      setMessage('🔄 Auto-switched to dual-package mode with Parent/Child Review pipeline for your header + table extraction.');
+
+      // Brief pause to show the message
+      await new Promise(resolve => setTimeout(resolve, 800));
+    } else if (promptRequiresDualPackage && packageMode === 'two') {
+      console.log('Dual-package mode already selected, proceeding with dual-package generation');
+      console.log('Current selectedTemplate:', selectedTemplate);
+      // Ensure the right pipeline is selected
+      const parentChildTemplate = pipelineTemplates.find(t => t.key === 'parent_child_review_send');
+      if (parentChildTemplate) {
+        console.log('Parent/Child template name:', parentChildTemplate.name);
+        console.log('Template match?', selectedTemplate === parentChildTemplate.name);
+        if (selectedTemplate !== parentChildTemplate.name) {
+          console.log('Setting Parent/Child template');
+          setSelectedTemplate(parentChildTemplate.name);
+          setFormData(prev => ({
+            ...prev,
+            pipeline_config: {
+              ...prev.pipeline_config,
+              steps: parentChildTemplate.steps,
+              objects: [],
+              parallel_processing: false
+              // Note: We don't update name/description here as those are for the document type, not the pipeline
+            }
+          }));
+        } else {
+          console.log('Parent/Child template already selected');
+        }
+      } else {
+        console.error('Parent/Child template not found when packageMode is two!');
+      }
+    } else if (!promptRequiresDualPackage && packageMode === 'two') {
+      // Optional: Ask if they want to switch back to single mode
+      console.log('Single-package prompt detected but dual mode selected - keeping dual mode for flexibility');
+    }
+
+    // Try AI service first
     try {
+      console.log('Attempting AI schema generation...');
+      const aiResponse = await apiService.generateAiSchema(aiPrompt.trim());
+
+      if (aiResponse.data.status === 'success' && aiResponse.data.schema) {
+        console.log('AI schema generation successful');
+        const aiSchema = aiResponse.data.schema;
+        const aiDocName = 'Custom Document Type';
+        const aiDocDescription = 'AI-generated document type with custom fields';
+
+        // Generate basic extraction prompt
+        const aiPromptText = `Extract structured data from: ${aiPrompt}. Focus on key information, dates, amounts, and relevant details. Be precise with numbers and dates.`;
+
+        // Update form data with AI-generated schema
+        setFormData(prev => ({
+          ...prev,
+          name: aiDocName,
+          description: aiDocDescription,
+          output_schema: aiSchema,
+          instructions: { prompt: aiPromptText, extraction_hints: [] },
+          pipeline_config: {
+            name: 'Extract, Review (HIL) & Send',
+            description: 'Extract, human review, then send',
+            steps: [
+              { step_type: 'extraction', name: 'Extract Data', description: 'Extract structured data', is_required: true, config: {}, depends_on: [] },
+              { step_type: 'hil', name: 'Review Data', description: 'Manual review and correction', is_required: true, config: {}, depends_on: [] },
+              { step_type: 'send', name: 'Send Data', description: 'Send processed data', is_required: true, config: {}, depends_on: [] }
+            ],
+            objects: [{
+              name: 'main_object',
+              object_type: 'standalone',
+              parent_object_name: null,
+              object_schema: aiSchema,
+              extraction_instructions: aiPromptText,
+              hil_config: prev.hil_instructions,
+              send_config: {}
+            }],
+            parallel_processing: false,
+            global_config: {}
+          }
+        }));
+
+        // Convert AI schema to fields for builder
+        console.log('Converting AI schema to fields:', aiSchema);
+        const aiNewFields = Object.entries(aiSchema.properties || {}).map(([name, def]) => {
+          console.log(`Processing field: ${name}`, def);
+          // Handle array fields with object items (like loadEntries)
+          if (def.type === 'array' && def.items?.type === 'object' && def.items?.properties) {
+            return {
+              id: Math.random(),
+              name,
+              type: 'array',
+              required: (aiSchema.required || []).includes(name),
+              description: def.description || def.title || '',
+              default: def.default || '',
+              nestedFields: Object.entries(def.items.properties).map(([propName, propDef]) => ({
+                id: Math.random(),
+                name: propName,
+                type: propDef.type || 'string',
+                required: (def.items.required || []).includes(propName),
+                description: propDef.description || propDef.title || '',
+                default: propDef.default || propDef.examples?.[0] || ''
+              })),
+              arrayItemType: 'object'
+            };
+          }
+
+          // Handle regular object fields
+          if (def.type === 'object' && def.properties) {
+            return {
+              id: Math.random(),
+              name,
+              type: 'object',
+              required: (aiSchema.required || []).includes(name),
+              description: def.description || def.title || '',
+              default: def.default || '',
+              nestedFields: Object.entries(def.properties).map(([propName, propDef]) => ({
+                id: Math.random(),
+                name: propName,
+                type: propDef.type || 'string',
+                required: (def.required || []).includes(propName),
+                description: propDef.description || propDef.title || '',
+                default: propDef.default || propDef.examples?.[0] || ''
+              })),
+              arrayItemType: 'string'
+            };
+          }
+
+          // Handle simple fields
+          return {
+            id: Math.random(),
+            name,
+            type: def.type || 'string',
+            required: (aiSchema.required || []).includes(name),
+            description: def.description || def.title || '',
+            default: def.default || def.examples?.[0] || '',
+            nestedFields: [],
+            arrayItemType: 'string'
+          };
+        });
+
+        console.log('Generated fields:', aiNewFields);
+        console.log('Full AI schema received:', aiSchema);
+
+        // Check if this should be two-package mode (has array with objects)
+        console.log('Checking for arrays with objects...');
+        console.log('AI new fields:', aiNewFields);
+        const hasArrayWithObjects = aiNewFields.some(field => {
+          const isArray = field.type === 'array';
+          const hasObjectItems = field.arrayItemType === 'object';
+          const hasNestedFields = field.nestedFields && field.nestedFields.length > 0;
+          console.log(`Field ${field.name}: type=${field.type}, arrayItemType=${field.arrayItemType}, nestedFields=${field.nestedFields?.length || 0}`);
+          console.log(`  isArray=${isArray}, hasObjectItems=${hasObjectItems}, hasNestedFields=${hasNestedFields}`);
+          return isArray && hasObjectItems && hasNestedFields;
+        });
+        console.log('Has array with objects:', hasArrayWithObjects);
+
+        if (hasArrayWithObjects) {
+          // Separate parent fields from child array
+          const parentFields = aiNewFields.filter(field => field.type !== 'array');
+          const childArrayField = aiNewFields.find(field => field.type === 'array' && field.arrayItemType === 'object');
+
+          console.log('Detected parent-child structure, switching to two-package mode');
+          console.log('Parent fields:', parentFields);
+          console.log('Child array field:', childArrayField);
+
+          // Build parent schema
+          const parentSchemaObj = { type: 'object', properties: {} };
+          parentFields.forEach(field => {
+            parentSchemaObj.properties[field.name] = {
+              type: field.type,
+              ...(field.description && { description: field.description }),
+              ...(field.default !== '' && { default: field.default })
+            };
+          });
+          parentSchemaObj.required = parentFields.filter(f => f.required).map(f => f.name);
+          setParentSchema(parentSchemaObj);
+
+          // Build child schema
+          const childSchemaObj = { type: 'object', properties: {} };
+          childArrayField.nestedFields.forEach(field => {
+            childSchemaObj.properties[field.name] = {
+              type: field.type,
+              ...(field.description && { description: field.description }),
+              ...(field.default !== '' && { default: field.default })
+            };
+          });
+          childSchemaObj.required = childArrayField.nestedFields.filter(f => f.required).map(f => f.name);
+          setChildSchema(childSchemaObj);
+
+          setParentSchemaFields(parentFields);
+          setChildSchemaFields(childArrayField.nestedFields);
+          setPackageMode('two');
+          setSchemaMode('builder');
+          setChildCollectionKey(childArrayField?.name || 'child_entries');
+
+          console.log('Setting parent schema:', parentSchemaObj);
+          console.log('Setting child schema:', childSchemaObj);
+          console.log('Setting parent fields:', parentFields);
+          console.log('Setting child fields:', childArrayField.nestedFields);
+
+          setMessage(`✅ AI generated dual-package schema for: ${aiDocName || 'Custom Document Type'}`);
+          setMessage(`Parent: ${parentFields.length} fields, Child: ${childArrayField.nestedFields.length} fields per entry`);
+        } else {
+          setSchemaFields(aiNewFields);
+          setPackageMode('single');
+          setSchemaMode('builder');
+          setSinglePackageType('object');
+          setMessage(`✅ AI generated schema with ${aiResponse.data.field_count || 0} fields for: Custom Document Type`);
+        }
+
+        setAiPrompt('');
+        setGeneratingSchema(false);
+        return; // Exit early on success
+      } else {
+        // Handle AI service errors
+        const aiErrorMessage = aiResponse.data.message || 'AI schema generation failed';
+        console.error('AI service returned error:', aiErrorMessage);
+        setMessage(`⚠️ AI generation failed: ${aiErrorMessage}. Using template fallback.`);
+      }
+    } catch (aiError) {
+      console.error('AI service error:', aiError);
+      setMessage('⚠️ AI service unavailable. Using template fallback.');
+    }
+
+    // Fallback to template-based generation
+    try {
+      console.log('Using template-based generation...');
       const prompt = aiPrompt.toLowerCase().trim();
       let generatedSchema = {};
       let generatedPrompt = '';
       let docName = '';
       let docDescription = '';
 
-      if (prompt.match(/invoice|bill|billing|vendor/)) {
+      // Smart parsing: Look for specific field mentions in the prompt
+      const fieldMatches = [];
+      if (prompt.includes('merchant name') || prompt.includes('store name') || prompt.includes('business name')) {
+        fieldMatches.push({ name: 'merchant_name', type: 'string', description: 'Merchant or store name' });
+      }
+      if (prompt.includes('total amount') || prompt.includes('total') || prompt.includes('amount')) {
+        fieldMatches.push({ name: 'total_amount', type: 'number', description: 'Total amount' });
+      }
+      if (prompt.includes('date')) {
+        fieldMatches.push({ name: 'document_date', type: 'date', description: 'Document date' });
+      }
+      if (prompt.includes('invoice number') || prompt.includes('reference number') || prompt.includes('id')) {
+        fieldMatches.push({ name: 'reference_number', type: 'string', description: 'Reference or ID number' });
+      }
+      if (prompt.includes('vendor') || prompt.includes('supplier')) {
+        fieldMatches.push({ name: 'vendor_name', type: 'string', description: 'Vendor or supplier name' });
+      }
+      if (prompt.includes('customer') || prompt.includes('client')) {
+        fieldMatches.push({ name: 'customer_name', type: 'string', description: 'Customer or client name' });
+      }
+
+      // Use matched fields if present
+      if (fieldMatches.length > 0) {
+        docName = 'Custom Document Type';
+        docDescription = 'AI-generated document type with custom fields';
+        fieldMatches.forEach(field => {
+          generatedSchema[field.name] = {
+            type: field.type,
+            required: true,
+            description: field.description
+          };
+        });
+        generatedPrompt = `You are extracting data from documents. Focus on: ${fieldMatches.map(f => f.description.toLowerCase()).join(', ')}. ${aiPrompt}`;
+      } else if (prompt.match(/invoice|bill|billing/) && !prompt.includes('just') && !prompt.includes('only')) {
         docName = 'Business Invoice';
         docDescription = 'Standard business invoice for goods or services';
         generatedSchema = {
@@ -193,7 +674,7 @@ const DocTypes = () => {
           "currency": {"type": "string", "required": true, "default": "USD", "description": "Currency code"},
           "payment_terms": {"type": "string", "required": false, "description": "Payment terms (e.g., Net 30)"}
         };
-        generatedPrompt = `You are extracting data from business invoices. Extract vendor information including nested contact details, all line items with quantities and prices, monetary amounts, and payment terms. Be extremely precise with numbers - include cents/decimals. Dates should be in YYYY-MM-DD format. For handwritten invoices, pay attention to cursive numbers and varying date formats.`;
+        generatedPrompt = `You are extracting data from business invoices. Extract vendor information including nested contact details, all line items with quantities and prices, monetary amounts, and payment terms. Be extremely precise with numbers - include cents/decimals. Dates should be in YYYY-MM-DD format.`;
       } else if (prompt.match(/receipt|purchase|store|shop/)) {
         docName = 'Purchase Receipt';
         docDescription = 'Retail purchase receipt from stores or merchants';
@@ -209,7 +690,7 @@ const DocTypes = () => {
           "currency": {"type": "string", "required": true, "default": "USD", "description": "Currency"},
           "payment_method": {"type": "string", "required": false, "description": "Payment method used"}
         };
-        generatedPrompt = `You are extracting data from retail receipts. Focus on merchant information, transaction details, and all monetary amounts. Be precise with numbers and include tax calculations. For handwritten receipts, look for amounts in the bottom-right area and dates at the top.`;
+        generatedPrompt = `You are extracting data from retail receipts. Focus on merchant information, transaction details, and all monetary amounts. Be precise with numbers and include tax calculations.`;
       } else if (prompt.match(/expense|reimbursement|employee|travel/)) {
         docName = 'Expense Report';
         docDescription = 'Employee expense reimbursement form';
@@ -245,7 +726,7 @@ const DocTypes = () => {
           "business_purpose": {"type": "string", "required": true, "description": "Overall business justification"},
           "approval_status": {"type": "string", "required": false, "description": "Current approval status"}
         };
-        generatedPrompt = `You are extracting data from employee expense forms. Extract employee information, multiple expense line items with dates and categories, total amounts, and approval details. For handwritten forms, employee signatures are usually at the bottom. Amounts may be in various formats - handle both $XX.XX and XX.XX formats.`;
+        generatedPrompt = `You are extracting data from employee expense forms. Extract employee information, multiple expense line items with dates and categories, total amounts, and approval details.`;
       } else if (prompt.match(/medical|prescription|patient|health|doctor/)) {
         docName = 'Medical Prescription';
         docDescription = 'Prescription form with patient and medication details';
@@ -298,7 +779,7 @@ const DocTypes = () => {
             }
           }
         };
-        generatedPrompt = `You are extracting data from medical prescriptions. Extract patient information, prescription details, medication lists with dosages and instructions, and prescribing doctor information. Be extremely careful with medication names, dosages, and numbers - these must be extracted precisely.`;
+        generatedPrompt = `You are extracting data from medical prescriptions. Extract patient information, prescription details, medication lists with dosages and instructions, and prescribing doctor information.`;
       } else if (prompt.match(/load.*sheet|harvest.*operation|harvest.*detail|field.*operation|agricultural.*load|extract.*table|table.*data|column.*names/i)) {
         docName = 'Harvest Load Sheet';
         docDescription = 'Agricultural harvest operation load sheet with header details and load table';
@@ -333,29 +814,25 @@ const DocTypes = () => {
           "total_loads": {"type": "number", "required": false, "description": "Total number of loads processed"},
           "supervisor": {"type": "string", "required": false, "description": "Supervising person or signature"}
         };
-        generatedPrompt = `You are extracting data from agricultural harvest load sheets. First extract the header details from the top 5 boxes: harvest date, field, acres, shift number, and shake number. Then extract all rows from the load table with columns: load number, ticket number, front trailer, back trailer, and harvest time. Be precise with numbers and times. Look for tabular data that may span multiple rows.`;
+        generatedPrompt = `You are extracting data from agricultural harvest load sheets. Extract header details and all rows from the load table with columns listed.`;
       } else if (prompt.match(/table|columns?|rows?|extract.*data.*from/i) && prompt.includes('column')) {
-        // Generic table extraction - try to parse column names from the prompt
+        // Generic table extraction - parse column names if present
         const columnMatches = prompt.match(/column.*names?[:\s]*(.*?)(?:\.|$)/i);
-        const columns = columnMatches ? 
-          columnMatches[1].split(/[,;]|\s+and\s+/).map(col => col.trim().toLowerCase().replace(/\s+/g, '_')) :
-          ['column_1', 'column_2', 'column_3'];
-        
+        const columns = columnMatches
+          ? columnMatches[1].split(/[,;]|\s+and\s+/).map(col => col.trim().toLowerCase().replace(/\s+/g, '_'))
+          : ['column_1', 'column_2', 'column_3'];
         docName = 'Table Data Extraction';
         docDescription = 'Generic table data extraction with custom columns';
-        
-        // Build table schema from detected columns
         const tableProperties = {};
         columns.forEach(col => {
           if (col) {
             tableProperties[col] = {
-              "type": "string",
-              "required": true,
-              "description": `${col.replace(/_/g, ' ')} from the table`
+              type: 'string',
+              required: true,
+              description: `${col.replace(/_/g, ' ')} from the table`
             };
           }
         });
-
         generatedSchema = {
           "document_header": {
             "type": "object",
@@ -371,10 +848,7 @@ const DocTypes = () => {
             "type": "array",
             "required": true,
             "description": "Extracted table rows",
-            "items": {
-              "type": "object",
-              "properties": tableProperties
-            }
+            "items": { "type": "object", "properties": tableProperties }
           },
           "summary_info": {
             "type": "object",
@@ -386,10 +860,11 @@ const DocTypes = () => {
             }
           }
         };
-        generatedPrompt = `You are extracting tabular data from documents. Look for header information, then extract all rows from the main table with the specified columns. Be precise with data extraction and maintain the structure of the original table. If there are summary totals or additional notes, include those as well.`;
+        generatedPrompt = `You are extracting tabular data from documents. Extract header information and table rows with the specified columns.`;
       } else {
-        docName = aiPrompt.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-        docDescription = `Custom document type: ${aiPrompt}`;
+        // Generic document type fallback
+        docName = 'Custom Document Type';
+        docDescription = 'AI-generated document type for custom document processing';
         generatedSchema = {
           "document_title": {"type": "string", "required": true, "description": "Document title or header"},
           "document_date": {"type": "date", "required": true, "description": "Document date"},
@@ -400,33 +875,84 @@ const DocTypes = () => {
           "currency": {"type": "string", "required": false, "default": "USD", "description": "Currency"},
           "notes": {"type": "string", "required": false, "description": "Additional notes or comments"}
         };
-        generatedPrompt = `You are extracting structured data from: ${aiPrompt}. Focus on identifying key information, dates, amounts, and relevant details specific to this document type. For handwritten documents, be patient with unclear handwriting and use context clues.`;
+        generatedPrompt = `You are extracting structured data from: ${aiPrompt}. Focus on key information, dates, amounts, and relevant details.`;
       }
 
-      setFormData(prev => ({
-        ...prev,
-        name: docName,
-        description: docDescription,
-        output_schema: generatedSchema,
-        instructions: {
-          prompt: generatedPrompt,
-          extraction_hints: []
-        }
-      }));
+      // Wrap generated schema in proper JSON Schema format
+      const jsonSchema = {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": generatedSchema,
+        "required": Object.entries(generatedSchema)
+          .filter(([_, fieldDef]) => fieldDef.required)
+          .map(([fieldName, _]) => fieldName)
+      };
 
-      const newFields = Object.entries(generatedSchema).map(([name, def]) => {
+      // Update form data: keep existing pipeline steps if present, but sync objects to new schema/prompt
+      setFormData(prev => {
+        const baseObject = {
+            name: 'main_object',
+            object_type: 'standalone',
+            parent_object_name: null,
+            object_schema: jsonSchema,
+            extraction_instructions: generatedPrompt,
+          hil_config: prev.hil_instructions || {
+            required_review_fields: [],
+            auto_approve_threshold: 0.85,
+            require_manual_review: false
+          },
+            send_config: {}
+        };
+
+        const hasExisting = prev.pipeline_config && ((prev.pipeline_config.steps?.length || 0) > 0 || (prev.pipeline_config.objects?.length || 0) > 0);
+        const pipeline_config = hasExisting
+          ? {
+              ...prev.pipeline_config,
+              objects: (prev.pipeline_config.objects && prev.pipeline_config.objects.length > 0)
+                ? prev.pipeline_config.objects.map(obj => ({
+                    ...baseObject,
+                    name: obj.name || baseObject.name,
+                    object_type: obj.object_type || baseObject.object_type,
+                    parent_object_name: obj.parent_object_name ?? baseObject.parent_object_name,
+                    send_config: obj.send_config || baseObject.send_config
+                  }))
+                : [baseObject]
+            }
+          : {
+              name: 'Extract, Review (HIL) & Send',
+              description: 'Extract, human review, then send',
+              steps: [
+                { step_type: 'extraction', name: 'Extract Data', description: 'Extract structured data', is_required: true, config: {}, depends_on: [] },
+                { step_type: 'hil', name: 'Review Data', description: 'Manual review and correction', is_required: true, config: {}, depends_on: [] },
+                { step_type: 'send', name: 'Send Data', description: 'Send processed data', is_required: true, config: {}, depends_on: [] }
+              ],
+              objects: [baseObject],
+              parallel_processing: false,
+          global_config: {}
+            };
+
+        return {
+        ...prev,
+        name: prev.name || docName,  // Preserve existing name if present
+        description: prev.description || docDescription,  // Preserve existing description if present
+        output_schema: jsonSchema,
+        instructions: { prompt: generatedPrompt, extraction_hints: [] },
+          pipeline_config
+        };
+      });
+
+      // Convert schema to fields for builder (objects, arrays with nested props)
+      const newFields = Object.entries(jsonSchema.properties).map(([name, def]) => {
         const field = {
           id: Math.random(),
           name,
-          type: def.type,
+        type: def.type || 'string',
           required: def.required || false,
           description: def.description || '',
           default: def.default || '',
           nestedFields: [],
           arrayItemType: 'string'
         };
-
-        // Handle nested object fields
         if (def.type === 'object' && def.properties) {
           field.nestedFields = Object.entries(def.properties).map(([propName, propDef]) => ({
             id: Math.random(),
@@ -437,8 +963,6 @@ const DocTypes = () => {
             default: propDef.default || ''
           }));
         }
-
-        // Handle array item types
         if (def.type === 'array' && def.items) {
           field.arrayItemType = def.items.type || 'string';
           if (def.items.type === 'object' && def.items.properties) {
@@ -452,20 +976,108 @@ const DocTypes = () => {
             }));
           }
         }
-
         return field;
       });
-      setSchemaFields(newFields);
 
-      setMessage(`AI generated schema for: ${docName}`);
-      setAiPrompt('');
-    } catch (e) {
-      setMessage('AI generation failed: ' + e.message);
+      setSchemaFields(newFields);
+      setMessage(`📝 Template generated schema for: ${docName}`);
+  setAiPrompt('');
+  setSchemaMode('builder');
+    } catch (templateError) {
+      console.error('Template generation error:', templateError);
+      setMessage('❌ Both AI and template generation failed. Please try again.');
     } finally {
       setGeneratingSchema(false);
     }
   };
 
+  const validateSchema = (schema) => {
+    const errors = [];
+    if (!schema || Object.keys(schema).length === 0) {
+      errors.push('Schema cannot be empty');
+      return errors;
+    }
+
+    // Check if this is a JSON Schema format (has $schema, type, properties)
+  if ((schema.$schema && schema.type === 'object' && schema.properties) ||
+    (schema.type === 'object' && schema.properties)) {
+      // Validate the properties object
+      const properties = schema.properties;
+      Object.entries(properties).forEach(([fieldName, fieldDef]) => {
+        if (!fieldName || !fieldName.trim()) {
+          errors.push('Field name cannot be empty');
+        }
+        if (!fieldDef.type) {
+          errors.push(`Field '${fieldName}' must have a type`);
+        }
+      });
+
+      // Validate required fields exist
+      if (schema.required && Array.isArray(schema.required)) {
+        schema.required.forEach(requiredField => {
+          if (!properties[requiredField]) {
+            errors.push(`Required field '${requiredField}' is not defined in properties`);
+          }
+        });
+      }
+    } else {
+      // Legacy format - validate directly as properties
+    Object.entries(schema).forEach(([fieldName, fieldDef]) => {
+      if (!fieldName || !fieldName.trim()) {
+        errors.push('Field name cannot be empty');
+      }
+      if (!fieldDef.type) {
+        errors.push(`Field '${fieldName}' must have a type`);
+      }
+    });
+    }
+
+    return errors;
+  };
+
+  // ===== PIPELINE FUNCTIONS =====
+  const addPipelineStep = () => {
+    const newStep = {
+      step_type: 'extraction',
+      name: 'New Step',
+      description: 'Step description',
+      is_required: true,
+      config: {},
+      depends_on: []
+    };
+
+    setFormData(prev => ({
+      ...prev,
+      pipeline_config: {
+        ...prev.pipeline_config,
+        steps: [...(prev.pipeline_config?.steps || []), newStep]
+      }
+    }));
+  };
+
+  const updatePipelineStep = (index, updatedStep) => {
+    setFormData(prev => ({
+      ...prev,
+      pipeline_config: {
+        ...prev.pipeline_config,
+        steps: prev.pipeline_config.steps.map((step, i) =>
+          i === index ? updatedStep : step
+        )
+      }
+    }));
+  };
+
+  const removePipelineStep = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      pipeline_config: {
+        ...prev.pipeline_config,
+        steps: prev.pipeline_config.steps.filter((_, i) => i !== index)
+      }
+    }));
+  };
+
+  // ===== SCHEMA FIELD FUNCTIONS =====
   const addSchemaField = () => {
     const newField = {
       id: Math.random(),
@@ -474,12 +1086,10 @@ const DocTypes = () => {
       required: false,
       description: '',
       default: '',
-      nestedFields: [], // For object types
-      arrayItemType: 'string' // For array types
+      nestedFields: [],
+      arrayItemType: 'string'
     };
-    const updatedFields = [...schemaFields, newField];
-    setSchemaFields(updatedFields);
-    updateSchemaFromFields(updatedFields);
+    setSchemaFields([...schemaFields, newField]);
   };
 
   const updateSchemaField = (fieldId, property, value) => {
@@ -496,154 +1106,17 @@ const DocTypes = () => {
     updateSchemaFromFields(updatedFields);
   };
 
-  const addNestedField = (parentFieldId) => {
-    const updatedFields = schemaFields.map(field => {
-      if (field.id === parentFieldId) {
-        const newNestedField = {
-          id: Math.random(),
-          name: 'nested_field',
-          type: 'string',
-          required: false,
-          description: '',
-          default: ''
-        };
-        return {
-          ...field,
-          nestedFields: [...(field.nestedFields || []), newNestedField]
-        };
-      }
-      return field;
-    });
-    setSchemaFields(updatedFields);
-    updateSchemaFromFields(updatedFields);
-  };
-
-  const updateNestedField = (parentFieldId, nestedFieldId, property, value) => {
-    const updatedFields = schemaFields.map(field => {
-      if (field.id === parentFieldId) {
-        const updatedNestedFields = field.nestedFields.map(nestedField =>
-          nestedField.id === nestedFieldId
-            ? { ...nestedField, [property]: value }
-            : nestedField
-        );
-        return { ...field, nestedFields: updatedNestedFields };
-      }
-      return field;
-    });
-    setSchemaFields(updatedFields);
-    updateSchemaFromFields(updatedFields);
-  };
-
-  const removeNestedField = (parentFieldId, nestedFieldId) => {
-    const updatedFields = schemaFields.map(field => {
-      if (field.id === parentFieldId) {
-        return {
-          ...field,
-          nestedFields: field.nestedFields.filter(nestedField => nestedField.id !== nestedFieldId)
-        };
-      }
-      return field;
-    });
-    setSchemaFields(updatedFields);
-    updateSchemaFromFields(updatedFields);
-  };
-
-  const toggleObjectExpansion = (fieldId) => {
-    const newExpanded = new Set(expandedObjects);
-    if (newExpanded.has(fieldId)) {
-      newExpanded.delete(fieldId);
-    } else {
-      newExpanded.add(fieldId);
-    }
-    setExpandedObjects(newExpanded);
-  };
-
-  const validateSchema = (schema) => {
-    const errors = [];
-
-    // Check for empty schema
-    if (!schema || Object.keys(schema).length === 0) {
-      errors.push('Schema cannot be empty');
-      return errors;
-    }
-
-    // Check each field
-    Object.entries(schema).forEach(([fieldName, fieldDef]) => {
-      // Check field name
-      if (!fieldName || !fieldName.trim()) {
-        errors.push('Field name cannot be empty');
-      }
-
-      // Check field type
-      if (!fieldDef.type) {
-        errors.push(`Field '${fieldName}' must have a type`);
-      }
-
-      // Validate object fields
-      if (fieldDef.type === 'object') {
-        if (!fieldDef.properties || Object.keys(fieldDef.properties).length === 0) {
-          errors.push(`Object field '${fieldName}' must have properties defined`);
-        } else {
-          // Recursively validate nested properties
-          Object.entries(fieldDef.properties).forEach(([propName, propDef]) => {
-            if (!propName || !propName.trim()) {
-              errors.push(`Property name in '${fieldName}' cannot be empty`);
-            }
-            if (!propDef.type) {
-              errors.push(`Property '${propName}' in '${fieldName}' must have a type`);
-            }
-          });
-        }
-      }
-
-      // Validate array fields
-      if (fieldDef.type === 'array') {
-        if (!fieldDef.items) {
-          errors.push(`Array field '${fieldName}' must specify item type in 'items'`);
-        } else if (!fieldDef.items.type) {
-          errors.push(`Array field '${fieldName}' items must have a type`);
-        }
-      }
-
-      // Check description for required fields
-      if (fieldDef.required && (!fieldDef.description || !fieldDef.description.trim())) {
-        errors.push(`Required field '${fieldName}' should have a description`);
-      }
-    });
-
-    return errors;
-  };
-
   const updateSchemaFromFields = (fields) => {
     const buildNestedSchema = (nestedFields) => {
       const schema = {};
       nestedFields.forEach(field => {
         if (field.name && field.name.trim()) {
-          if (field.type === 'object' && field.nestedFields?.length > 0) {
-            schema[field.name] = {
-              type: 'object',
-              required: field.required,
-              description: field.description,
-              properties: buildNestedSchema(field.nestedFields)
-            };
-          } else if (field.type === 'array') {
-            const itemSchema = field.arrayItemType === 'object' && field.nestedFields?.length > 0
-              ? { type: 'object', properties: buildNestedSchema(field.nestedFields) }
-              : { type: field.arrayItemType || 'string' };
-            schema[field.name] = {
-              type: 'array',
-              required: field.required,
-              description: field.description,
-              items: itemSchema
-            };
-          } else {
             schema[field.name] = {
               type: field.type,
               required: field.required,
               description: field.description,
               ...(field.default && { default: field.default })
             };
-          }
         }
       });
       return schema;
@@ -682,173 +1155,413 @@ const DocTypes = () => {
     setFormData(prev => ({ ...prev, output_schema: schema }));
   };
 
-  const createDocType = async () => {
-    if (!tenantId) {
-      setMessage('Please set tenant ID first');
-      return;
-    }
-
-    // Validate schema before saving
-    const validationErrors = validateSchema(formData.output_schema);
-    if (validationErrors.length > 0) {
-      setMessage('Schema validation errors: ' + validationErrors.join('; '));
-      return;
-    }
-
-    setLoading(true);
-    try {
-      apiService.setTenantId(tenantId);
-      const payload = {
-        tenant_id: Number(tenantId),
-        name: formData.name,
-        description: formData.description,
-        instructions: formData.instructions,
-        output_schema: formData.output_schema
-      };
-
-      let response;
-      if (editingId) {
-        response = await api.put(`/doc-types/${editingId}`, payload);
-        setMessage('Updated successfully');
-        // If we're in edit modal, close it after successful update
-        if (showEditModal) {
-          setTimeout(() => closeEditModal(), 1000);
-        }
-      } else {
-        response = await api.post('/doc-types/', payload);
-        setMessage('Created successfully');
-      }
-
-      if (!editingId && response.data?.id) {
-        setEditingId(response.data.id);
-      }
-
-      loadDocTypes();
-    } catch (e) {
-      setMessage('Error: ' + (e.response?.data?.detail || e.message));
-    } finally {
-      setLoading(false);
-    }
+  // ===== UI FUNCTIONS =====
+  const startWizard = () => {
+          setEditingId(null);
+    setShowEditModal(false);
+    setWizardStep(1);
+    setShowCreateWizard(true);
   };
 
   const editDocType = (docType) => {
+    const hilFromPipeline = (docType.pipeline_config?.objects && docType.pipeline_config.objects[0]?.hil_config) || {
+      required_review_fields: [],
+      auto_approve_threshold: 0.85,
+      require_manual_review: false
+    };
+
     setFormData({
       name: docType.name,
       description: docType.description || '',
       output_schema: docType.output_schema || {},
       instructions: docType.instructions || { prompt: '', extraction_hints: [] },
-      hil_instructions: docType.hil_instructions || {
-        required_review_fields: [],
-        auto_approve_threshold: 0.85,
-        require_manual_review: false
-      }
+      hil_instructions: docType.hil_instructions || hilFromPipeline,
+    pipeline_config: docType.pipeline_config || {
+        name: 'Custom Pipeline',
+        description: 'Custom pipeline',
+        steps: [],
+        objects: [{
+          name: 'main_object',
+          object_type: 'standalone',
+          parent_object_name: null,
+          object_schema: docType.output_schema || {},
+          extraction_instructions: (docType.instructions && docType.instructions.prompt) || '',
+      hil_config: hilFromPipeline,
+          send_config: {}
+        }],
+        parallel_processing: false,
+        global_config: {}
+      },
+      destination_webhook: docType.destination_webhook || ''
     });
 
-    const fields = Object.entries(docType.output_schema || {}).map(([name, def]) => {
-      const field = {
+    // Convert schema to fields for the builder
+    const fields = Object.entries(docType.output_schema || {}).map(([name, def]) => ({
         id: Math.random(),
         name,
         type: def.type || 'string',
         required: def.required || false,
         description: def.description || '',
         default: def.default || '',
-        nestedFields: [],
-        arrayItemType: 'string'
-      };
-
-      // Handle nested object fields
-      if (def.type === 'object' && def.properties) {
-        field.nestedFields = Object.entries(def.properties).map(([propName, propDef]) => ({
+      nestedFields: def.type === 'object' && def.properties ?
+        Object.entries(def.properties).map(([propName, propDef]) => ({
           id: Math.random(),
           name: propName,
           type: propDef.type || 'string',
           required: propDef.required || false,
           description: propDef.description || '',
           default: propDef.default || ''
-        }));
-      }
+        })) : [],
+      arrayItemType: def.type === 'array' ? (def.items?.type || 'string') : 'string'
+    }));
 
-      // Handle array item types
-      if (def.type === 'array' && def.items) {
-        field.arrayItemType = def.items.type || 'string';
-        if (def.items.type === 'object' && def.items.properties) {
-          field.nestedFields = Object.entries(def.items.properties).map(([propName, propDef]) => ({
+    setSchemaFields(fields);
+    setEditingId(docType.id);
+    setIsEditing(true);
+    setWizardStep(1);
+    setShowCreateWizard(true);
+
+    // Populate the AI prompt field with the document description for reference
+    if (docType.description) {
+      setAiPrompt(docType.description);
+    }
+
+    // Detect dual-package mode from output schema (arrays) or pipeline config
+    const outputSchema = docType.output_schema || {};
+    const hasArrayInOutputSchema = Object.values(outputSchema).some(field =>
+      field && typeof field === 'object' && field.type === 'array'
+    );
+
+    const pipelineObjects = docType.pipeline_config?.objects || [];
+    const hasParentChildObjects = pipelineObjects.some(o => o.object_type === 'parent') &&
+                                  pipelineObjects.some(o => o.object_type === 'children');
+
+    if (hasArrayInOutputSchema || hasParentChildObjects) {
+      console.log('Detected dual-package mode from:', { hasArrayInOutputSchema, hasParentChildObjects });
+
+      if (hasParentChildObjects) {
+        // Use pipeline objects for dual-package setup
+        const parentObj = pipelineObjects.find(o => o.object_type === 'parent');
+        const childObj = pipelineObjects.find(o => o.object_type === 'children');
+        setChildCollectionKey('child_entries');
+
+        if (parentObj?.object_schema) {
+          setParentSchema(parentObj.object_schema);
+          const parentFields = Object.entries(parentObj.object_schema).map(([name, def]) => ({
             id: Math.random(),
-            name: propName,
-            type: propDef.type || 'string',
-            required: propDef.required || false,
-            description: propDef.description || '',
-            default: propDef.default || ''
+            name,
+            type: def.type || 'string',
+            required: def.required || false,
+            description: def.description || '',
+            default: def.default || '',
+            nestedFields: def.type === 'object' && def.properties ?
+              Object.entries(def.properties).map(([propName, propDef]) => ({
+                id: Math.random(),
+                name: propName,
+                type: propDef.type || 'string',
+                required: propDef.required || false,
+                description: propDef.description || '',
+                default: propDef.default || ''
+              })) : [],
+            arrayItemType: def.type === 'array' ? (def.items?.type || 'string') : 'string'
           }));
+          setParentSchemaFields(parentFields);
+          setParentSchemaJson(JSON.stringify(parentObj.object_schema, null, 2));
+        }
+
+        if (childObj?.object_schema) {
+          setChildSchema(childObj.object_schema);
+          const childFields = Object.entries(childObj.object_schema).map(([name, def]) => ({
+            id: Math.random(),
+            name,
+            type: def.type || 'string',
+            required: def.required || false,
+            description: def.description || '',
+            default: def.default || '',
+            nestedFields: def.type === 'object' && def.properties ?
+              Object.entries(def.properties).map(([propName, propDef]) => ({
+                id: Math.random(),
+                name: propName,
+                type: propDef.type || 'string',
+                required: propDef.required || false,
+                description: propDef.description || '',
+                default: propDef.default || ''
+              })) : [],
+            arrayItemType: def.type === 'array' ? (def.items?.type || 'string') : 'string'
+          }));
+          setChildSchemaFields(childFields);
+          setChildSchemaJson(JSON.stringify(childObj.object_schema, null, 2));
+        }
+  } else if (hasArrayInOutputSchema) {
+        // Extract parent and child schemas from output_schema
+        console.log('Setting up dual-package from output schema arrays');
+
+        const parentFields = [];
+        let childArrayField = null;
+
+    Object.entries(outputSchema).forEach(([name, def]) => {
+          if (def && typeof def === 'object' && def.type === 'array' && def.items) {
+            // This is the child array field
+            childArrayField = {
+              name,
+              definition: def,
+              items: def.items
+            };
+      setChildCollectionKey(name);
+          } else {
+            // This is a parent field
+            parentFields.push({
+              name,
+              definition: def
+            });
+          }
+        });
+
+        if (parentFields.length > 0) {
+          // Build parent schema
+          const parentSchemaObj = { type: 'object', properties: {} };
+          parentFields.forEach(field => {
+            parentSchemaObj.properties[field.name] = field.definition;
+          });
+          parentSchemaObj.required = parentFields
+            .filter(field => field.definition && field.definition.required)
+            .map(field => field.name);
+
+          setParentSchema(parentSchemaObj);
+
+          // Convert to parent fields
+          const parentFieldObjs = parentFields.map(field => ({
+            id: Math.random(),
+            name: field.name,
+            type: field.definition?.type || 'string',
+            required: field.definition?.required || false,
+            description: field.definition?.description || '',
+            default: field.definition?.default || '',
+            nestedFields: field.definition?.type === 'object' && field.definition?.properties ?
+              Object.entries(field.definition.properties).map(([propName, propDef]) => ({
+                id: Math.random(),
+                name: propName,
+                type: propDef.type || 'string',
+                required: propDef.required || false,
+                description: propDef.description || '',
+                default: propDef.default || ''
+              })) : [],
+            arrayItemType: 'string'
+          }));
+
+          setParentSchemaFields(parentFieldObjs);
+          setParentSchemaJson(JSON.stringify(parentSchemaObj, null, 2));
+        }
+
+        if (childArrayField) {
+          // Build child schema from array items
+          const childSchemaObj = childArrayField.items;
+          if (childSchemaObj && typeof childSchemaObj === 'object') {
+            setChildSchema(childSchemaObj);
+
+            // Convert to child fields
+            const childFieldObjs = childSchemaObj.properties ?
+              Object.entries(childSchemaObj.properties).map(([name, def]) => ({
+                id: Math.random(),
+                name,
+                type: def?.type || 'string',
+                required: (childSchemaObj.required || []).includes(name),
+                description: def?.description || '',
+                default: def?.default || '',
+                nestedFields: def?.type === 'object' && def?.properties ?
+                  Object.entries(def.properties).map(([propName, propDef]) => ({
+                    id: Math.random(),
+                    name: propName,
+                    type: propDef?.type || 'string',
+                    required: propDef?.required || false,
+                    description: propDef?.description || '',
+                    default: propDef?.default || ''
+                  })) : [],
+                arrayItemType: 'string'
+              })) : [];
+
+            setChildSchemaFields(childFieldObjs);
+            setChildSchemaJson(JSON.stringify(childSchemaObj, null, 2));
+          }
         }
       }
 
-      return field;
-    });
-    setSchemaFields(fields);
+      setPackageMode('two');
+    } else {
+      // If single but schema is wrapped as array, set controls accordingly
+      const entries = Object.entries(outputSchema || {});
+      const arrayKey = entries.find(([_, def]) => def && def.type === 'array');
+      if (arrayKey) {
+        setSinglePackageType('array');
+        setSingleCollectionKey(arrayKey[0]);
+      } else {
+        setSinglePackageType('object');
+        setSingleCollectionKey('records');
+      }
+      setPackageMode('single');
+    }
 
-    setEditingId(docType.id);
-    setShowEditModal(true);
+    // Auto-select a matching pipeline template if present
+    try {
+      const allowedNames = pipelineTemplates.map(t => t.name);
+      const currentName = docType.pipeline_config?.name;
+      if (currentName && allowedNames.includes(currentName)) {
+        setSelectedTemplate(currentName);
+      } else {
+        setSelectedTemplate('');
+      }
+    } catch (_) {
+      setSelectedTemplate('');
+    }
+
+  // Package mode is already set above based on pipelineObjects
   };
 
-  const closeEditModal = () => {
+  const closeModals = () => {
     setShowEditModal(false);
+    setShowCreateWizard(false);
+    setEditModalTab('basic');
     setEditingId(null);
+    setIsEditing(false);
     setTestFile(null);
     setTestResults(null);
     setShowTestOutput(false);
     setMessage('');
+
+    // Reset dual schema states
+    setParentSchema({});
+    setChildSchema({});
+    setParentSchemaFields([]);
+    setChildSchemaFields([]);
+    setParentSchemaMode('builder');
+    setChildSchemaMode('builder');
+    setParentSchemaJson('{}');
+    setChildSchemaJson('{}');
+  setChildCollectionKey('child_entries');
+  setSinglePackageType('object');
+  setSingleCollectionKey('records');
   };
 
-  const deleteDocType = async (id) => {
-    if (!window.confirm('Delete this document type?')) return;
-    
-    try {
-      apiService.setTenantId(tenantId);
-      await api.delete(`/doc-types/${id}`);
-      setMessage('Deleted successfully');
-      loadDocTypes();
-    } catch (e) {
-      setMessage('Delete error: ' + (e.response?.data?.detail || e.message));
+  const canProceedToStep = (step) => {
+    switch (step) {
+      case 2:
+        return formData.name.trim() && formData.description.trim();
+      case 3:
+        return (
+          !!selectedTemplate &&
+          !!formData.pipeline_config &&
+          Array.isArray(formData.pipeline_config.steps) &&
+          formData.pipeline_config.steps.length > 0 &&
+          !!packageMode
+        );
+      case 4:
+        // Check if schema is properly defined based on package mode
+        let schemaValid = false;
+        if (packageMode === 'single') {
+          schemaValid = Object.keys(formData.output_schema || {}).length > 0;
+        } else if (packageMode === 'two') {
+          schemaValid = Object.keys(parentSchema).length > 0 && Object.keys(childSchema).length > 0;
+        }
+        return schemaValid && (formData.instructions?.prompt || '').trim();
+      case 5:
+        return true;
+      default:
+        return true;
     }
   };
 
+  // ===== TESTING FUNCTIONS =====
   const testExtraction = async () => {
     if (!testFile) {
       setMessage('Please upload a test document');
       return;
     }
 
-    if (!editingId) {
-      setMessage('Please save the document type first');
-      return;
-    }
-
     setTesting(true);
     try {
-      // Read file content as text
       let fileContent;
-      
       if (testFile.type.startsWith('text/') || testFile.name.endsWith('.txt')) {
-        // For text files, read as text
         fileContent = await readFileAsText(testFile);
       } else if (testFile.type.startsWith('image/')) {
-        // For images, we need to convert to base64
         fileContent = await readFileAsBase64(testFile);
       } else {
-        // For other files (PDFs, etc.), try to read as text first
         try {
           fileContent = await readFileAsText(testFile);
         } catch (e) {
-          // If text reading fails, convert to base64
           fileContent = await readFileAsBase64(testFile);
         }
       }
       
       apiService.setTenantId(tenantId);
       
-      const res = await api.post(`/doc-types/${editingId}/test`, {
-        sample_text: fileContent
+      const testConfig = {
+        name: formData.name,
+        description: formData.description,
+        instructions: formData.instructions,
+        output_schema: packageMode === 'two'
+          ? { parent_schema: parentSchema, child_schema: childSchema, collection_key: childCollectionKey || 'child_entries' }
+          : formData.output_schema,
+        destination_webhook: formData.destination_webhook,
+        pipeline_config: formData.pipeline_config || (packageMode === 'two'
+          ? {
+              name: 'Test Pipeline',
+              description: 'Temporary pipeline for testing (dual)',
+              steps: [
+                { step_type: 'extraction', name: 'Extract Data', description: 'Extract structured data from document', is_required: true, config: {}, depends_on: [] }
+              ],
+              objects: [
+                {
+                  name: 'parent_object',
+                  object_type: 'parent',
+                  parent_object_name: null,
+                  object_schema: parentSchema,
+                  extraction_instructions: formData.instructions.prompt,
+                  hil_config: formData.hil_instructions,
+                  send_config: { scope: 'parent' }
+                },
+                {
+                  name: childCollectionKey || 'child_entries',
+                  object_type: 'children',
+                  parent_object_name: 'parent_object',
+                  object_schema: childSchema,
+                  extraction_instructions: formData.instructions.prompt,
+                  hil_config: formData.hil_instructions,
+                  send_config: { scope: 'children' }
+                }
+              ],
+              parallel_processing: false,
+              global_config: {}
+            }
+          : {
+          name: 'Test Pipeline',
+          description: 'Temporary pipeline for testing',
+          steps: [
+            {
+              step_type: 'extraction',
+              name: 'Extract Data',
+              description: 'Extract structured data from document',
+              is_required: true,
+              config: {},
+              depends_on: []
+            }
+          ],
+          objects: [{
+            name: 'main_object',
+            object_type: 'standalone',
+            parent_object_name: null,
+            object_schema: formData.output_schema,
+            extraction_instructions: formData.instructions.prompt,
+            hil_config: formData.hil_instructions,
+            send_config: {}
+          }],
+          parallel_processing: false,
+          global_config: {}
+            })
+      };
+      
+      const res = await api.post('/test-extraction', {
+        sample_text: fileContent,
+        test_config: testConfig
       });
       
       setTestResults(res.data);
@@ -878,7 +1591,6 @@ const DocTypes = () => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = e => {
-        // Remove the data URL prefix to get just the base64 string
         const base64 = e.target.result.split(',')[1];
         resolve(base64);
       };
@@ -887,58 +1599,12 @@ const DocTypes = () => {
     });
   };
 
-  const resetWizard = () => {
-    setFormData({
-      name: '',
-      description: '',
-      output_schema: {},
-      instructions: { prompt: '', extraction_hints: [] },
-      hil_instructions: {
-        required_review_fields: [],
-        auto_approve_threshold: 0.85,
-        require_manual_review: false
-      }
-    });
-    setSchemaFields([]);
-    setExpandedObjects(new Set());
-    setArrayItemTypes({});
-    setEditingId(null);
-    setShowCreateWizard(false);
-    setWizardStep(1);
-    setTestResults(null);
-    setTestFile(null);
-    setShowTestOutput(false);
-    setSchemaMode('builder');
-  };
+  // ===== EFFECTS =====
+  useEffect(() => {
+    loadDocTypes();
+  }, [loadDocTypes]);
 
-  const toggleHilField = (fieldName) => {
-    const current = formData.hil_instructions.required_review_fields || [];
-    const updated = current.includes(fieldName) 
-      ? current.filter(f => f !== fieldName)
-      : [...current, fieldName];
-    
-    setFormData(prev => ({
-      ...prev,
-      hil_instructions: {
-        ...prev.hil_instructions,
-        required_review_fields: updated
-      }
-    }));
-  };
-
-  const canProceedToStep = (step) => {
-    switch (step) {
-      case 2:
-        return formData.name.trim() && formData.description.trim();
-      case 3:
-        return Object.keys(formData.output_schema).length > 0 && formData.instructions.prompt.trim();
-      case 4:
-        return true;
-      default:
-        return true;
-    }
-  };
-
+  // ===== RENDER FUNCTIONS =====
   const renderWizardStep = () => {
     switch (wizardStep) {
       case 1:
@@ -956,10 +1622,11 @@ const DocTypes = () => {
               <div>
                 <label className="block text-sm font-medium mb-2">Document Type Name</label>
                 <input
+                  type="text"
                   value={formData.name}
                   onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full border-2 border-gray-300 dark:border-slate-600 p-3 rounded-lg focus:border-accent-500 focus:outline-none"
-                  placeholder="e.g., Custom Invoice, Medical Form"
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-slate-600 rounded-lg focus:border-accent-500 focus:outline-none"
+                  placeholder="e.g., Purchase Receipt"
                 />
               </div>
 
@@ -973,10 +1640,54 @@ const DocTypes = () => {
                 />
               </div>
 
+              <div>
+                <label className="block text-sm font-medium mb-2">Destination Webhook (Optional)</label>
+                <input
+                  type="url"
+                  value={formData.destination_webhook}
+                  onChange={(e) => setFormData(prev => ({ ...prev, destination_webhook: e.target.value }))}
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-slate-600 rounded-lg focus:border-accent-500 focus:outline-none"
+                  placeholder="https://your-api.com/webhook"
+                />
+                <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+                  URL where processed documents will be sent
+                </p>
+              </div>
+
               <div className="text-center">
                 <p className="text-sm text-gray-500 dark:text-slate-400 mb-3">Or let AI create everything for you</p>
                 <button
-                  onClick={() => setShowAIGenerator(true)}
+                  onClick={() => {
+                    // Only set defaults if not already in dual-package mode (respect auto-detection)
+                    if (packageMode !== 'two') {
+                      const defaultTemplate = pipelineTemplates.find(t => t.key === 'extract_review_send');
+                      if (defaultTemplate) {
+                        setSelectedTemplate(defaultTemplate.name);
+                        setPackageMode('single');
+                        setFormData(prev => ({
+                          ...prev,
+                          pipeline_config: {
+                            ...prev.pipeline_config,
+                            steps: defaultTemplate.steps,
+                            objects: [{
+                              name: 'main_object',
+                              object_type: 'standalone',
+                              parent_object_name: null,
+                              object_schema: prev.output_schema,
+                              extraction_instructions: prev.instructions?.prompt || '',
+                              hil_config: prev.hil_instructions,
+                              send_config: {}
+                            }],
+                            parallel_processing: false
+                            // Note: We don't update name/description here as those are for the document type, not the pipeline
+                          }
+                        }));
+                      }
+                    }
+                    // Prefill the AI prompt to avoid an empty disabled button in Step 3
+                    setAiPrompt(prev => prev || formData.description || formData.name || '');
+                    setWizardStep(3);
+                  }}
                   className="bg-gradient-to-r from-purple-600 to-accent-600 text-white px-6 py-3 rounded-lg flex items-center space-x-2 mx-auto hover:from-purple-700 hover:to-accent-700 transition-all shadow-lg"
                 >
                   <Wand2 className="h-5 w-5" />
@@ -989,6 +1700,234 @@ const DocTypes = () => {
 
       case 2:
         return (
+          <div className="space-y-6">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <ArrowRight className="h-8 w-8 text-blue-600" />
+              </div>
+              <h3 className="text-xl font-semibold mb-2">Pipeline Configuration</h3>
+              <p className="text-gray-600 dark:text-slate-300">Choose how your document will be processed</p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  Choose a Pipeline Template
+                </label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {pipelineTemplates.map((template, index) => {
+                    const isDisabled = template.disabled || template.comingSoon;
+                    const isSelected = selectedTemplate === template.name;
+                    return (
+                      <div
+                        key={index}
+                        onClick={() => {
+                          if (isDisabled) return;
+                          setSelectedTemplate(template.name);
+                          // Build objects depending on template
+                          setFormData(prev => {
+                            let objects = [{
+                                name: 'main_object',
+                                object_type: 'standalone',
+                                parent_object_name: null,
+                                object_schema: prev.output_schema,
+                                extraction_instructions: prev.instructions?.prompt || '',
+                                hil_config: prev.hil_instructions,
+                                send_config: {}
+                            }];
+
+                            // If parent-child template, split into two packages
+                            if (template.key === 'parent_child_review_send') {
+                              // Find first array field as child entries
+                              const entries = Object.entries(prev.output_schema || {});
+                              let childFieldName = null;
+                              let childItems = null;
+                              for (const [fname, fdef] of entries) {
+                                if (fdef?.type === 'array') {
+                                  childFieldName = fname;
+                                  childItems = fdef.items || { type: 'string' };
+                                  break;
+                                }
+                              }
+
+                              // Parent schema is full schema without the child array (if found)
+                              const parentSchema = { ...(prev.output_schema || {}) };
+                              if (childFieldName) {
+                                try { delete parentSchema[childFieldName]; } catch (_) {}
+                              }
+
+                              // Child schema derived from array item type (prefer object properties)
+                              let childSchema;
+                              if (childItems?.type === 'object' && childItems?.properties) {
+                                childSchema = { type: 'object', properties: childItems.properties };
+                              } else if (childItems?.type) {
+                                childSchema = { type: 'object', properties: { value: { type: childItems.type, required: false, description: 'Child entry value' } } };
+                              } else {
+                                childSchema = { type: 'object', properties: {} };
+                              }
+
+                objects = [
+                                {
+                                  name: 'parent_object',
+                                  object_type: 'parent',
+                                  parent_object_name: null,
+                                  object_schema: parentSchema,
+                                  extraction_instructions: prev.instructions?.prompt || '',
+                                  hil_config: prev.hil_instructions,
+                                  send_config: { scope: 'parent' }
+                                },
+                                {
+                  name: childCollectionKey || 'child_entries',
+                                  object_type: 'children',
+                                  parent_object_name: 'parent_object',
+                                  object_schema: childSchema,
+                                  extraction_instructions: prev.instructions?.prompt || '',
+                                  hil_config: prev.hil_instructions,
+                                  send_config: { scope: 'children' }
+                                }
+                              ];
+
+                              setPackageMode('two');
+                setChildCollectionKey(childFieldName || 'child_entries');
+                            } else {
+                              setPackageMode('single');
+                            }
+
+                            return {
+                              ...prev,
+                              pipeline_config: {
+                                ...prev.pipeline_config,
+                                name: template.name,
+                                description: template.description,
+                                steps: template.steps,
+                                objects,
+                              parallel_processing: false
+                            }
+                            };
+                          });
+                        }}
+                        className={`relative p-4 border-2 rounded-lg transition-all ${
+                          isDisabled
+                            ? 'opacity-60 cursor-not-allowed border-slate-200 dark:border-slate-700'
+                            : `cursor-pointer ${isSelected ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-slate-200 dark:border-slate-600 hover:border-slate-300'}`
+                        }`}
+                      >
+                        <div className="flex items-start justify-between">
+                        <h4 className="font-semibold text-slate-800 dark:text-slate-200">{template.name}</h4>
+                          {template.comingSoon && (
+                            <span className="text-xs px-2 py-1 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200">Coming soon</span>
+                          )}
+                        </div>
+                        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{template.description}</p>
+                        {template.steps?.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {template.steps.map((step, stepIndex) => (
+                              <span key={stepIndex} className="text-xs bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">
+                                {step.name || step.step_type}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        </div>
+                    );
+                  })}
+                      </div>
+              </div>
+
+              {selectedTemplate && (
+                <div className="border-t pt-4">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    Output Structure
+                  </label>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {/* Single package card */}
+                    <div
+                      onClick={() => {
+                        const isParentChild = selectedTemplate === pipelineTemplates.find(t => t.key === 'parent_child_review_send')?.name;
+                        if (isParentChild) return; // forced two packages
+                        setPackageMode('single');
+                      }}
+                      className={`p-4 border-2 rounded-lg transition-all ${
+                        selectedTemplate === pipelineTemplates.find(t => t.key === 'parent_child_review_send')?.name
+                          ? 'opacity-60 cursor-not-allowed border-slate-200'
+                          : `cursor-pointer ${packageMode === 'single' ? 'border-green-500 bg-green-50' : 'border-slate-200 hover:border-slate-300'}`
+                      }`}
+                      title={selectedTemplate === pipelineTemplates.find(t => t.key === 'parent_child_review_send')?.name ? 'Parent/Child pipeline requires two packages' : undefined}
+                    >
+                      <h5 className="font-semibold">Single package</h5>
+                      <p className="text-sm text-slate-600">All extracted fields in one result object</p>
+                    </div>
+
+                    {/* Two packages card */}
+                    <div
+                      onClick={() => {
+                        const isParentChild = selectedTemplate === pipelineTemplates.find(t => t.key === 'parent_child_review_send')?.name;
+                        if (!isParentChild) return; // only enabled for parent/child template
+                        setPackageMode('two');
+                      }}
+                      className={`p-4 border-2 rounded-lg transition-all ${
+                        selectedTemplate === pipelineTemplates.find(t => t.key === 'parent_child_review_send')?.name
+                          ? `${packageMode === 'two' ? 'border-green-500 bg-green-50' : 'cursor-pointer border-slate-200 hover:border-slate-300'}`
+                          : 'opacity-60 cursor-not-allowed border-slate-200'
+                      }`}
+                      title={selectedTemplate === pipelineTemplates.find(t => t.key === 'parent_child_review_send')?.name ? undefined : 'Two-package mode is available only for the Parent/Child template'}
+                    >
+                      <h5 className="font-semibold">Two packages</h5>
+                      <p className="text-sm text-slate-600">Parent object sent first, then child entries as a second package</p>
+                  </div>
+                  </div>
+                  {/* Single package additional options */}
+                  {packageMode === 'single' && (
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">Single Package Type</label>
+                        <select
+                          value={singlePackageType}
+                          onChange={(e) => setSinglePackageType(e.target.value)}
+                          className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800"
+                        >
+                          <option value="object">Single object</option>
+                          <option value="array">Array of objects</option>
+                        </select>
+                      </div>
+                      {singlePackageType === 'array' && (
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">Collection Key</label>
+                          <input
+                            type="text"
+                            value={singleCollectionKey}
+                            onChange={(e) => setSingleCollectionKey(e.target.value)}
+                            placeholder="records"
+                            className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {/* Dual package additional options */}
+                  {packageMode === 'two' && (
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">Child Collection Key</label>
+                        <input
+                          type="text"
+                          value={childCollectionKey}
+                          onChange={(e) => setChildCollectionKey(e.target.value)}
+                          placeholder="child_entries"
+                          className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800"
+                        />
+                        <p className="text-xs text-slate-500 mt-1">Used only for preview/export shape. Extraction/HIL use per-object schemas.</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+
+      case 3:
+        return (
           <div className="space-y-8">
             <div className="text-center">
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1000,9 +1939,40 @@ const DocTypes = () => {
 
             {/* AI Generator Section */}
             <div className="bg-gradient-to-r from-purple-50 to-accent-50 border-2 border-purple-200 rounded-xl p-6">
-              <div className="flex items-center space-x-3 mb-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-3">
                 <Wand2 className="h-6 w-6 text-purple-600" />
                 <h4 className="text-lg font-semibold text-purple-800">AI Schema Generator</h4>
+                </div>
+
+                {/* Package Mode and Pipeline Indicator */}
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm text-purple-700">Package Mode:</span>
+                    <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                      packageMode === 'single'
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'bg-green-100 text-green-700'
+                    }`}>
+                      {packageMode === 'single' ? 'Single Package' : 'Dual Package'}
+                    </div>
+                    {packageMode === 'two' && (
+                      <span className="text-xs text-purple-600">🔄 Auto-detected</span>
+                    )}
+                  </div>
+
+                  {selectedTemplate && (
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm text-purple-700">Pipeline:</span>
+                      <div className="px-3 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700">
+                        {selectedTemplate}
+                      </div>
+                      {packageMode === 'two' && (
+                        <span className="text-xs text-purple-600">🔄 Auto-selected</span>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <div className="lg:col-span-2">
@@ -1011,10 +1981,16 @@ const DocTypes = () => {
                     value={aiPrompt}
                     onChange={(e) => setAiPrompt(e.target.value)}
                     className="w-full border-2 border-purple-300 p-3 rounded-lg h-24 focus:border-purple-500 focus:outline-none"
-                    placeholder="e.g., 'Medical prescription with patient info, medication details, and dosage' or 'Employee expense report for travel reimbursements'"
+                    placeholder="e.g., 'Medical prescription with patient info, medication details, and dosage' or 'First extract header with date and total, THEN extract table rows with item details'"
                   />
                   <p className="text-xs text-purple-600 mt-1">
                     💡 Be specific about fields, amounts, dates, and categories you want to extract
+                  </p>
+                  <p className="text-xs text-purple-500 mt-1">
+                    🎯 For dual-package: Use phrases like "first extract header THEN extract table", "parent object AND child entries"
+                  </p>
+                  <p className="text-xs text-purple-400 mt-1">
+                    ⚙️ System auto-selects Parent/Child Review pipeline for dual-package processing
                   </p>
                 </div>
                 <div className="flex flex-col justify-center">
@@ -1027,108 +2003,200 @@ const DocTypes = () => {
                     <span>{generatingSchema ? 'Generating...' : 'Generate'}</span>
                   </button>
                 </div>
-              </div>
-            </div>
-
-            {/* Schema Editor */}
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Output Fields</h4>
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => setShowSchemaEditor(true)}
-                    className="bg-accent-600 text-white px-6 py-3 rounded-lg flex items-center space-x-2 hover:bg-accent-700 transition-colors shadow-lg"
-                  >
-                    <Code className="h-5 w-5" />
-                    <span>Open Schema Editor</span>
-                  </button>
                 </div>
               </div>
 
-              {/* Schema Summary */}
+              {/* Enhanced Schema Editor */}
               <div className="bg-gray-50 dark:bg-slate-800 border-2 border-gray-200 dark:border-slate-700 rounded-lg p-6">
-                {schemaFields.length > 0 ? (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
+                {/* Schema Editor Header */}
+                <div className="flex items-center justify-between mb-6">
                       <div className="flex items-center space-x-3">
                         <div className="w-8 h-8 bg-accent-100 dark:bg-accent-900 rounded-lg flex items-center justify-center">
                           <FileText className="h-4 w-4 text-accent-600 dark:text-accent-400" />
                         </div>
                         <div>
-                          <h5 className="font-semibold text-gray-900 dark:text-white">Schema Defined</h5>
-                          <p className="text-sm text-gray-600 dark:text-slate-300">{schemaFields.length} fields configured</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm text-gray-500 dark:text-slate-400">Field Types</div>
-                        <div className="flex space-x-2 mt-1">
-                          {[...new Set(schemaFields.map(f => f.type))].map(type => (
-                            <span key={type} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-accent-100 dark:bg-accent-900 text-accent-800 dark:text-accent-200">
-                              {type === 'string' && '📝'} 
-                              {type === 'number' && '🔢'} 
-                              {type === 'date' && '📅'} 
-                              {type === 'boolean' && '☑️'} 
-                              {type === 'object' && '📦'} 
-                              {type === 'array' && '📋'} 
-                              {type}
-                            </span>
-                          ))}
-                        </div>
+                      <h5 className="font-semibold text-gray-900 dark:text-white">Schema Editor</h5>
+                      <p className="text-sm text-gray-600 dark:text-slate-300">
+                        {packageMode === 'single' ? 'Define the structure for your single package' : 'Define structures for parent and child packages'}
+                      </p>
                       </div>
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {schemaFields.slice(0, 4).map(field => (
-                        <div key={field.id} className="bg-white border border-gray-200 dark:border-slate-700 rounded-lg p-3">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="font-medium text-sm text-gray-900 dark:text-white">{field.name}</span>
-                            <span className={`text-xs px-2 py-1 rounded-full ${
-                              field.required ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300'
-                            }`}>
-                              {field.required ? 'Required' : 'Optional'}
-                            </span>
-                          </div>
-                          <div className="text-xs text-gray-500 dark:text-slate-400 mb-1">{field.description}</div>
+                  {/* Editor Mode Toggle */}
                           <div className="flex items-center space-x-2">
-                            <span className="text-xs font-medium text-accent-600 dark:text-accent-400">{field.type}</span>
-                            {field.type === 'array' && (
-                              <span className="text-xs text-gray-500 dark:text-slate-400">of {field.arrayItemType}</span>
-                            )}
-                            {(field.nestedFields || []).length > 0 && (
-                              <span className="text-xs text-green-600">
-                                {field.nestedFields.length} nested fields
-                              </span>
-                            )}
+                    <button
+                      onClick={() => {
+                        if (packageMode === 'single') {
+                          setSchemaMode('builder');
+                        } else {
+                          setParentSchemaMode('builder');
+                          setChildSchemaMode('builder');
+                        }
+                      }}
+                      className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                        (packageMode === 'single' && schemaMode === 'builder') ||
+                        (packageMode === 'two' && parentSchemaMode === 'builder')
+                          ? 'bg-accent-100 text-accent-700 dark:bg-accent-900 dark:text-accent-300'
+                          : 'text-gray-600 hover:text-gray-800 dark:text-slate-400 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      Builder
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (packageMode === 'single') {
+                          setSchemaMode('json');
+                        } else {
+                          setParentSchemaMode('json');
+                          setChildSchemaMode('json');
+                        }
+                      }}
+                      className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                        (packageMode === 'single' && schemaMode === 'json') ||
+                        (packageMode === 'two' && parentSchemaMode === 'json')
+                          ? 'bg-accent-100 text-accent-700 dark:bg-accent-900 dark:text-accent-300'
+                          : 'text-gray-600 hover:text-gray-800 dark:text-slate-400 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      JSON
+                    </button>
                           </div>
                         </div>
-                      ))}
+
+                {/* Single Package Schema Editor */}
+                {packageMode === 'single' && (
+                  <div className="space-y-4">
+                    {schemaMode === 'builder' ? (
+                      <SchemaBuilder
+                        fields={schemaFields}
+                        onFieldsChange={setSchemaFields}
+                        onSchemaChange={(schema) => {
+                          // For single package, we store plain properties object by default
+                          // If user selected array type, wrap under items
+                          if (singlePackageType === 'array') {
+                            const wrapped = { type: 'object', properties: schema };
+                            setFormData(prev => ({ ...prev, output_schema: wrapped }));
+                          } else {
+                            setFormData(prev => ({ ...prev, output_schema: schema }));
+                          }
+                        }}
+                      />
+                    ) : (
+                      <SchemaJsonEditor
+                        schema={formData.output_schema}
+                        onSchemaChange={(schema) => setFormData(prev => ({ ...prev, output_schema: schema }))}
+                      />
+                    )}
                     </div>
-                    
-                    {schemaFields.length > 4 && (
-                      <div className="text-center py-2">
-                        <span className="text-sm text-gray-500 dark:text-slate-400">
-                          +{schemaFields.length - 4} more fields...
+                )}
+
+                {/* Two Package Schema Editor */}
+                {packageMode === 'two' && (
+                  <div className="space-y-6">
+                    {/* Parent Schema */}
+                    <div className="border-2 border-blue-200 dark:border-blue-800 rounded-lg p-4 bg-blue-50/50 dark:bg-blue-900/10">
+                      <div className="flex items-center justify-between mb-4">
+                        <h6 className="font-semibold text-blue-800 dark:text-blue-200">Parent Package Schema</h6>
+                        <span className="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 px-2 py-1 rounded">
+                          Header Data
                         </span>
                       </div>
+                      {parentSchemaMode === 'builder' ? (
+                        <SchemaBuilder
+                          fields={parentSchemaFields}
+                          onFieldsChange={setParentSchemaFields}
+                          onSchemaChange={setParentSchema}
+                        />
+                      ) : (
+                        <SchemaJsonEditor
+                          schema={parentSchema}
+                          onSchemaChange={setParentSchema}
+                        />
                     )}
                   </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <FileText className="h-12 w-12 mx-auto mb-3 text-gray-500 dark:text-slate-400" />
-                    <h5 className="font-semibold text-gray-900 dark:text-white mb-1">No Schema Defined</h5>
-                    <p className="text-sm text-gray-600 dark:text-slate-300 mb-4">Open the schema editor to define your extraction fields</p>
-                    <button
-                      onClick={() => setShowSchemaEditor(true)}
-                      className="bg-accent-600 text-white px-4 py-2 rounded-lg hover:bg-accent-700 transition-colors"
-                    >
-                      Get Started
-                    </button>
+
+                    {/* Child Schema */}
+                    <div className="border-2 border-green-200 dark:border-green-800 rounded-lg p-4 bg-green-50/50 dark:bg-green-900/10">
+                      <div className="flex items-center justify-between mb-4">
+                        <h6 className="font-semibold text-green-800 dark:text-green-200">Child Package Schema</h6>
+                        <span className="text-xs bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 px-2 py-1 rounded">
+                          Line Items
+                        </span>
+                      </div>
+                      {childSchemaMode === 'builder' ? (
+                        <SchemaBuilder
+                          fields={childSchemaFields}
+                          onFieldsChange={setChildSchemaFields}
+                          onSchemaChange={setChildSchema}
+                        />
+                      ) : (
+                        <SchemaJsonEditor
+                          schema={childSchema}
+                          onSchemaChange={setChildSchema}
+                        />
+                      )}
+                    </div>
                   </div>
                 )}
-              </div>
+
+                {/* Schema Preview */}
+                <div className="mt-6 pt-6 border-t border-gray-200 dark:border-slate-700">
+                  <div className="flex items-center justify-between mb-4">
+                    <h6 className="font-semibold text-gray-900 dark:text-white">Schema Preview</h6>
+                    <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-slate-400">
+                      {packageMode === 'single' ? (
+                        (() => {
+                          const sch = formData.output_schema || {};
+                          const props = sch.properties || sch;
+                          // If schema is array-wrapped at root (single array collection), try to read items.properties
+                          let count = Object.keys(props || {}).length;
+                          if (count === 0 && !sch.properties && typeof sch === 'object') {
+                            const arrayEntry = Object.values(sch).find(v => v && v.type === 'array');
+                            if (arrayEntry && arrayEntry.items && arrayEntry.items.properties) {
+                              count = Object.keys(arrayEntry.items.properties).length;
+                            }
+                          }
+                          return <span>{count} fields</span>;
+                        })()
+                      ) : (
+                        <>
+                          <span>Parent: {parentSchemaFields.length} fields</span>
+                          <span>Child: {childSchemaFields.length} fields per entry</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-600 rounded-lg p-4 max-h-48 overflow-y-auto">
+                    <pre className="text-xs text-gray-800 dark:text-slate-200 whitespace-pre-wrap">
+                      {(() => {
+                        if (packageMode === 'single') {
+                          const props = formData.output_schema?.properties ? formData.output_schema.properties : formData.output_schema;
+                          if (singlePackageType === 'array') {
+                            const preview = {
+                              [singleCollectionKey || 'records']: {
+                                type: 'array',
+                                items: { type: 'object', properties: props || {} }
+                              }
+                            };
+                            return JSON.stringify(preview, null, 2);
+                          }
+                          // object
+                          return JSON.stringify(formData.output_schema, null, 2);
+                        }
+                        // dual-package preview: show distinct schemas to avoid implying a combined output
+                        const preview = {
+                          parent_schema: parentSchema,
+                          child_schema: childSchema,
+                          collection_key: childCollectionKey || 'child_entries'
+                        };
+                        return JSON.stringify(preview, null, 2);
+                      })()}
+                    </pre>
+                  </div>
+                </div>
             </div>
 
-            {/* Extraction Instructions Section */}
+            {/* Extraction Instructions */}
             <div className="border-t-2 border-gray-200 dark:border-slate-700 pt-8">
               <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Extraction Instructions</h4>
               <div className="bg-yellow-50 border-2 border-yellow-200 dark:bg-yellow-900 dark:border-yellow-800 rounded-xl p-6">
@@ -1139,8 +2207,7 @@ const DocTypes = () => {
                   <div>
                     <h5 className="font-semibold text-yellow-800 mb-1">AI Extraction Guidance</h5>
                     <p className="text-sm text-yellow-700">
-                      Provide specific instructions to help AI extract data accurately, especially for handwritten documents, 
-                      unusual layouts, or documents with special formatting requirements.
+                      Provide specific instructions to help AI extract data accurately, especially for handwritten documents.
                     </p>
                   </div>
                 </div>
@@ -1154,110 +2221,11 @@ const DocTypes = () => {
                       instructions: { ...prev.instructions, prompt: e.target.value }
                     }))}
                     className="w-full border-2 border-yellow-300 p-4 rounded-lg h-32 focus:border-yellow-500 focus:outline-none bg-white"
-                    placeholder="Example: 'Extract data from handwritten expense forms. Look for employee signature at bottom-right. Amounts may be written in cursive. Date format varies - could be MM/DD/YY or DD/MM/YYYY. If expense category is unclear, classify as 'Other'.'"
+                    placeholder="Example: 'Extract data from handwritten expense forms. Look for employee signature at bottom-right. Amounts may be written in cursive.'"
                   />
-                  <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-yellow-700">
-                    <div>
-                      <strong>💡 Tips for better extraction:</strong>
-                      <ul className="list-disc list-inside mt-1 space-y-1">
-                        <li>Mention handwriting challenges</li>
-                        <li>Specify date/number formats</li>
-                        <li>Note field locations on document</li>
-                      </ul>
                     </div>
-                    <div>
-                      <strong>📝 For handwritten documents:</strong>
-                      <ul className="list-disc list-inside mt-1 space-y-1">
-                        <li>Describe typical writing styles</li>
-                        <li>Mention common abbreviations</li>
-                        <li>Handle unclear or missing data</li>
-                      </ul>
                     </div>
                   </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-
-      case 3:
-        return (
-          <div className="space-y-6">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <CheckCircle className="h-8 w-8 text-orange-600" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">Review Settings</h3>
-              <p className="text-gray-600 dark:text-slate-300">Configure human review requirements</p>
-            </div>
-
-            <div className="max-w-2xl mx-auto space-y-6">
-              <div className="bg-gray-50 dark:bg-slate-800 p-6 rounded-lg">
-                <label className="block text-sm font-medium mb-3">Auto-Approval Confidence</label>
-                <div className="space-y-2">
-                  <input
-                    type="range"
-                    min="0.5"
-                    max="1.0"
-                    step="0.05"
-                    value={formData.hil_instructions.auto_approve_threshold}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      hil_instructions: {
-                        ...prev.hil_instructions,
-                        auto_approve_threshold: parseFloat(e.target.value)
-                      }
-                    }))}
-                    className="w-full h-2 bg-gray-200 dark:bg-slate-600 rounded-lg appearance-none cursor-pointer slider"
-                  />
-                  <div className="flex justify-between text-xs text-gray-500 dark:text-slate-400">
-                    <span>Conservative (50%)</span>
-                    <span className="font-semibold text-accent-600 dark:text-accent-400">
-                      {Math.round(formData.hil_instructions.auto_approve_threshold * 100)}% Confidence
-                    </span>
-                    <span>Aggressive (100%)</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gray-50 dark:bg-slate-800 p-6 rounded-lg">
-                <label className="flex items-center space-x-3 text-sm font-medium mb-4">
-                  <input
-                    type="checkbox"
-                    checked={formData.hil_instructions.require_manual_review}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      hil_instructions: {
-                        ...prev.hil_instructions,
-                        require_manual_review: e.target.checked
-                      }
-                    }))}
-                    className="h-5 w-5 text-accent-600 dark:text-accent-400 rounded focus:ring-accent-500"
-                  />
-                  <span>Always require manual review (overrides confidence threshold)</span>
-                </label>
-
-                <div>
-                  <label className="block text-sm font-medium mb-3">Fields Requiring Manual Review</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {Object.keys(formData.output_schema).map(fieldName => (
-                      <label key={fieldName} className="flex items-center space-x-2 text-sm bg-white p-2 rounded border">
-                        <input
-                          type="checkbox"
-                          checked={formData.hil_instructions.required_review_fields.includes(fieldName)}
-                          onChange={() => toggleHilField(fieldName)}
-                          className="h-4 w-4 text-accent-600 dark:text-accent-400 rounded focus:ring-accent-500"
-                        />
-                        <span>{fieldName}</span>
-                      </label>
-                    ))}
-                  </div>
-                  {Object.keys(formData.output_schema).length === 0 && (
-                    <p className="text-sm text-gray-500 dark:text-slate-400 italic">Define output fields first to configure review settings</p>
-                  )}
-                </div>
-              </div>
-            </div>
           </div>
         );
 
@@ -1265,59 +2233,78 @@ const DocTypes = () => {
         return (
           <div className="space-y-6">
             <div className="text-center">
-              <div className="w-16 h-16 bg-accent-100 dark:bg-accent-900 rounded-full flex items-center justify-center mx-auto mb-4">
-                <TestTube className="h-8 w-8 text-accent-600 dark:text-accent-400" />
+              <div className="w-16 h-16 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400" />
               </div>
-              <h3 className="text-xl font-semibold mb-2">Test Your Extraction</h3>
-              <p className="text-gray-600 dark:text-slate-300">Upload a sample document to test your schema</p>
+              <h3 className="text-xl font-semibold mb-2">
+                {editingId ? `Ready to Update "${formData.name || 'Document Type'}"` : 'Ready to Save'}
+              </h3>
+              <p className="text-gray-600 dark:text-slate-300">
+                {editingId ? 'Review and update your document type configuration' : 'Review your document type configuration'}
+              </p>
             </div>
 
             <div className="max-w-2xl mx-auto space-y-6">
-              <div className="bg-purple-50 border-2 border-purple-200 rounded-lg p-6">
-                <h4 className="font-semibold mb-3 text-purple-800">Test Your Extraction</h4>
+              <div className="bg-green-50 border-2 border-green-200 dark:bg-green-900/20 dark:border-green-800 rounded-lg p-6">
+                <h4 className="font-semibold mb-3 text-green-800 dark:text-green-200">Configuration Summary</h4>
                 
                 <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Upload Test Document</label>
-                    <div className="border-2 border-dashed border-purple-300 rounded-lg p-6 text-center bg-white">
-                      <input
-                        type="file"
-                        onChange={(e) => setTestFile(e.target.files[0])}
-                        className="hidden"
-                        id="test-file-upload"
-                        accept=".txt,.pdf,.doc,.docx,.jpg,.png"
-                      />
-                      <label htmlFor="test-file-upload" className="cursor-pointer">
-                        <Upload className="h-12 w-12 mx-auto mb-3 text-purple-400" />
-                        <p className="text-sm text-gray-900 dark:text-white font-medium">
-                          {testFile ? `📄 ${testFile.name}` : 'Click to upload test document'}
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
-                          PDF, images, text files supported
-                        </p>
-                      </label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-white dark:bg-slate-800 p-4 rounded-lg border border-green-200 dark:border-green-700">
+                      <h5 className="font-medium text-gray-900 dark:text-white mb-2">Basic Information</h5>
+                      <p className="text-sm text-gray-600 dark:text-slate-300">
+                        <strong>Name:</strong> {formData.name || 'Not set'}
+                      </p>
+                      <p className="text-sm text-gray-600 dark:text-slate-300">
+                        <strong>Description:</strong> {formData.description || 'Not set'}
+                      </p>
+                    </div>
+                    
+                    <div className="bg-white dark:bg-slate-800 p-4 rounded-lg border border-green-200 dark:border-green-700">
+                      <h5 className="font-medium text-gray-900 dark:text-white mb-2">Schema Fields</h5>
+                      {packageMode === 'single' ? (
+                        <>
+                      <p className="text-sm text-gray-600 dark:text-slate-300">
+                        <strong>Fields Defined:</strong> {schemaFields.length}
+                      </p>
+                      <p className="text-sm text-gray-600 dark:text-slate-300">
+                        <strong>Required Fields:</strong> {schemaFields.filter(f => f.required).length}
+                      </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-sm text-gray-600 dark:text-slate-300">
+                            <strong>Parent Fields:</strong> {parentSchemaFields.length}
+                          </p>
+                          <p className="text-sm text-gray-600 dark:text-slate-300">
+                            <strong>Child Fields:</strong> {childSchemaFields.length}
+                          </p>
+                        </>
+                      )}
                     </div>
                   </div>
 
-                  <button
-                    onClick={testExtraction}
-                    disabled={testing || !testFile}
-                    className="w-full bg-purple-600 text-white py-3 rounded-lg flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-purple-700 transition-colors"
-                  >
-                    <TestTube className="h-5 w-5" />
-                    <span>{testing ? 'Testing Extraction...' : 'Test Extraction'}</span>
-                  </button>
+                  <div className="bg-white dark:bg-slate-800 p-4 rounded-lg border border-green-200 dark:border-green-700">
+                    <h5 className="font-medium text-gray-900 dark:text-white mb-2">Instructions</h5>
+                    <p className="text-sm text-gray-600 dark:text-slate-300">
+                      {formData.instructions?.prompt ? 
+                        `"${formData.instructions.prompt.substring(0, 100)}${formData.instructions.prompt.length > 100 ? '...' : ''}"`
+                        : 'No custom instructions provided'
+                      }
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              <div className="bg-yellow-50 border-2 border-yellow-200 dark:bg-yellow-900 dark:border-yellow-800 rounded-lg p-4">
+              <div className="bg-blue-50 border-2 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800 rounded-lg p-4">
                 <div className="flex items-start space-x-3">
-                  <div className="w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-white font-bold text-xs">!</span>
+                  <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-white font-bold text-xs">💡</span>
                   </div>
                   <div>
-                    <p className="text-sm text-yellow-800">
-                      <strong>Note:</strong> You can configure webhook endpoints and other integrations after saving the document type.
+                    <p className="text-sm text-blue-800 dark:text-blue-200">
+                      <strong>What happens next:</strong> After saving, you can upload documents, configure webhooks, 
+                      and further customize your extraction pipeline in the main interface.
                     </p>
                   </div>
                 </div>
@@ -1331,6 +2318,7 @@ const DocTypes = () => {
     }
   };
 
+  // ===== MAIN RENDER =====
   return (
     <div className="min-h-screen bg-white dark:bg-slate-900 transition-colors">
       <div className="container mx-auto px-4 py-8">
@@ -1347,7 +2335,7 @@ const DocTypes = () => {
           </div>
           {!showCreateWizard && (
             <button
-              onClick={() => startWizard()}
+              onClick={startWizard}
               className="bg-gradient-to-r from-blue-600 to-accent-600 text-white px-6 py-3 rounded-xl flex items-center space-x-2 hover:from-blue-700 hover:to-accent-700 transition-all shadow-lg"
             >
               <Plus className="h-5 w-5" />
@@ -1382,59 +2370,10 @@ const DocTypes = () => {
           </div>
         </div>
 
+        {/* Messages */}
         {message && (
           <div className="bg-blue-50 dark:bg-slate-800 border-l-4 border-blue-500 dark:border-blue-400 text-blue-700 dark:text-slate-200 p-4 rounded-lg mb-8">
             {message}
-          </div>
-        )}
-
-        {/* AI Generator Modal */}
-        {showAIGenerator && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl max-w-lg w-full mx-4 shadow-2xl">
-              <div className="text-center mb-6">
-                <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-accent-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Wand2 className="h-8 w-8 text-white" />
-                </div>
-                <h3 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">AI Schema Generator</h3>
-                <p className="text-gray-600 dark:text-slate-300">Describe your document type and let AI create the perfect schema</p>
-              </div>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-slate-200">Document Description</label>
-                  <textarea
-                    value={aiPrompt}
-                    onChange={(e) => setAiPrompt(e.target.value)}
-                    className="w-full border-2 border-gray-300 dark:border-slate-600 p-3 rounded-lg h-32 focus:border-accent-500 focus:outline-none bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
-                    placeholder="e.g., 'Medical prescription with patient information, medication details, and dosage instructions' or 'Employee expense report for travel reimbursements'"
-                  />
-                </div>
-                
-                <div className="bg-purple-50 p-4 rounded-lg">
-                  <p className="text-sm text-purple-700">
-                    <strong>💡 Tip:</strong> Be specific! Mention key information like amounts, dates, people, or categories you want to extract.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-3 mt-6">
-                <button
-                  onClick={() => setShowAIGenerator(false)}
-                  className="border-2 border-gray-300 dark:border-slate-600 px-6 py-2 rounded-lg hover:bg-gray-50 dark:bg-slate-800 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={generateSchemaWithAI}
-                  disabled={generatingSchema || !aiPrompt.trim()}
-                  className="bg-gradient-to-r from-purple-600 to-accent-600 text-white px-6 py-2 rounded-lg flex items-center space-x-2 disabled:opacity-50 hover:from-purple-700 hover:to-accent-700 transition-all"
-                >
-                  <Wand2 className="h-4 w-4" />
-                  <span>{generatingSchema ? 'Generating...' : 'Generate Schema'}</span>
-                </button>
-              </div>
-            </div>
           </div>
         )}
 
@@ -1445,7 +2384,7 @@ const DocTypes = () => {
             <div className="bg-slate-50 dark:bg-slate-900 px-8 py-4 border-b border-slate-200 dark:border-slate-700">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                  Step {wizardStep} of 4
+                  Step {wizardStep} of 5
                 </span>
                 <span className="text-sm text-slate-500 dark:text-slate-400">
                   Creating: {formData.name || 'New Document Type'}
@@ -1454,7 +2393,7 @@ const DocTypes = () => {
               <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
                 <div 
                   className="bg-slate-700 dark:bg-slate-500 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${(wizardStep / 4) * 100}%` }}
+                  style={{ width: `${(wizardStep / 5) * 100}%` }}
                 ></div>
               </div>
             </div>
@@ -1467,7 +2406,7 @@ const DocTypes = () => {
             {/* Navigation */}
             <div className="bg-slate-50 dark:bg-slate-900 px-8 py-6 border-t border-slate-200 dark:border-slate-700 flex justify-between">
               <button
-                onClick={() => wizardStep > 1 ? setWizardStep(wizardStep - 1) : resetWizard()}
+                onClick={() => wizardStep > 1 ? setWizardStep(wizardStep - 1) : closeModals()}
                 className="flex items-center space-x-2 text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100 transition-colors"
               >
                 <ArrowLeft className="h-4 w-4" />
@@ -1475,7 +2414,7 @@ const DocTypes = () => {
               </button>
 
               <div className="flex space-x-3">
-                {wizardStep < 4 ? (
+                {wizardStep < 5 ? (
                   <button
                     onClick={() => setWizardStep(wizardStep + 1)}
                     disabled={!canProceedToStep(wizardStep + 1)}
@@ -1491,7 +2430,7 @@ const DocTypes = () => {
                     className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-8 py-2 rounded-lg flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed hover:from-green-700 hover:to-emerald-700 transition-all"
                   >
                     <Save className="h-4 w-4" />
-                    <span>{loading ? 'Saving...' : (editingId ? 'Update Type' : 'Create Type')}</span>
+                    <span>{loading ? 'Saving...' : 'Create Type'}</span>
                   </button>
                 )}
               </div>
@@ -1499,535 +2438,129 @@ const DocTypes = () => {
           </div>
         )}
 
-        {/* Edit Modal */}
-        {showEditModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-4xl w-full max-h-[90vh] overflow-hidden">
-              {/* Header */}
-              <div className="bg-gradient-to-r from-blue-600 to-accent-600 px-8 py-6 border-b border-gray-200 dark:border-slate-700">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-2xl font-bold text-white">Edit Document Type</h2>
-                    <p className="text-blue-100 mt-1">Modify settings for "{formData.name}"</p>
-                  </div>
-                  <button
-                    onClick={closeEditModal}
-                    className="text-white hover:text-slate-300 transition-colors"
-                  >
-                    <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-              {/* Content */}
-              <div className="p-8 overflow-y-auto max-h-[calc(90vh-140px)]">
-                <div className="space-y-8">
-                  {/* Basic Information */}
-                  <div className="bg-gray-50 dark:bg-slate-700 rounded-xl p-6">
-                    <h3 className="text-lg font-semibold mb-4 flex items-center text-gray-900 dark:text-white">
-                      <FileText className="h-5 w-5 mr-2 text-blue-600 dark:text-accent-400" />
-                      Basic Information
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-slate-200 mb-2">Document Type Name</label>
-                        <input
-                          type="text"
-                          value={formData.name}
-                          onChange={(e) => setFormData({...formData, name: e.target.value})}
-                          className="w-full px-4 py-3 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-accent-500 focus:border-accent-500"
-                          placeholder="e.g., Purchase Receipt"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-slate-200 mb-2">Description</label>
-                        <input
-                          type="text"
-                          value={formData.description}
-                          onChange={(e) => setFormData({...formData, description: e.target.value})}
-                          className="w-full px-4 py-3 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-accent-500 focus:border-accent-500"
-                          placeholder="Brief description of this document type"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Extraction Instructions */}
-                  <div className="bg-gradient-to-r from-blue-50 to-accent-50 dark:bg-slate-700 rounded-xl p-6">
-                    <h3 className="text-lg font-semibold mb-4 flex items-center text-gray-900 dark:text-white">
-                      <Wand2 className="h-5 w-5 mr-2 text-blue-600 dark:text-accent-400" />
-                      Extraction Instructions
-                    </h3>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">AI Extraction Prompt</label>
-                      <textarea
-                        value={formData.instructions?.prompt || ''}
-                        onChange={(e) => setFormData({
-                          ...formData, 
-                          instructions: {...formData.instructions, prompt: e.target.value}
-                        })}
-                        className="w-full px-4 py-3 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-accent-500 focus:border-accent-500"
-                        rows={4}
-                        placeholder="Provide specific instructions for AI extraction. For example: 'Focus on merchant information, transaction details, and monetary amounts. Be precise with numbers and include tax calculations.'"
-                      />
-                    </div>
-                  </div>
-
-                  {/* AI Schema Generator */}
-                  <div className="bg-gradient-to-r from-purple-50 to-accent-50 dark:bg-slate-700 rounded-xl p-6">
-                    <h3 className="text-lg font-semibold mb-4 flex items-center text-gray-900 dark:text-white">
-                      <Wand2 className="h-5 w-5 mr-2 text-purple-600 dark:text-accent-400" />
-                      AI Schema Generator
-                    </h3>
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
-                          Describe what data you want to extract
-                        </label>
-                        <textarea
-                          value={aiPrompt}
-                          onChange={(e) => setAiPrompt(e.target.value)}
-                          className="w-full px-4 py-3 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                          rows={3}
-                          placeholder="e.g., 'Extract merchant name, date, total amount, tax, and line items from receipts'"
-                        />
-                      </div>
-                      <button
-                        onClick={generateSchemaWithAI}
-                        disabled={!aiPrompt.trim() || generatingSchema}
-                        className="bg-purple-600 text-white px-6 py-3 rounded-lg flex items-center space-x-2 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      >
-                        <Wand2 className="h-4 w-4" />
-                        <span>{generatingSchema ? 'Generating...' : 'Generate Schema'}</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Schema Fields */}
-                  <div className="bg-green-50 rounded-xl p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-lg font-semibold flex items-center">
-                        <Code className="h-5 w-5 mr-2 text-green-600" />
-                        Data Fields ({schemaFields.length})
-                      </h3>
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => setSchemaMode('builder')}
-                          className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                            schemaMode === 'builder' 
-                              ? 'bg-green-600 text-white' 
-                              : 'bg-white text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:bg-slate-800'
-                          }`}
-                        >
-                          Builder
-                        </button>
-                        <button
-                          onClick={() => setSchemaMode('editor')}
-                          className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                            schemaMode === 'editor' 
-                              ? 'bg-green-600 text-white' 
-                              : 'bg-white text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:bg-slate-800'
-                          }`}
-                        >
-                          JSON Editor
-                        </button>
-                      </div>
-                    </div>
-                    {schemaMode === 'builder' ? (
-                      <div className="space-y-4 max-h-60 overflow-y-auto">
-                        {schemaFields.map((field) => (
-                          <div key={field.id} className="bg-white rounded-lg p-4 border border-gray-200 dark:border-slate-700">
-                            <div className="flex items-start justify-between mb-3">
-                              <h4 className="font-medium text-gray-900 dark:text-white">{field.name || 'Untitled Field'}</h4>
-                              <button
-                                onClick={() => removeSchemaField(field.id)}
-                                className="text-red-500 hover:text-red-700 transition-colors"
-                                title="Remove field"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                              <div>
-                                <label className="block text-sm font-medium text-gray-600 dark:text-slate-300 mb-1">Field Name</label>
-                                <input
-                                  type="text"
-                                  value={field.name}
-                                  onChange={(e) => updateSchemaField(field.id, 'name', e.target.value)}
-                                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-600 dark:text-slate-300 mb-1">Type</label>
-                                <select
-                                  value={field.type}
-                                  onChange={(e) => updateSchemaField(field.id, 'type', e.target.value)}
-                                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md text-sm"
-                                >
-                                  <option value="string">Text</option>
-                                  <option value="number">Number</option>
-                                  <option value="date">Date</option>
-                                  <option value="boolean">Yes/No</option>
-                                  <option value="array">List</option>
-                                  <option value="object">Object</option>
-                                </select>
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-600 dark:text-slate-300 mb-1">Required</label>
-                                <input
-                                  type="checkbox"
-                                  checked={field.required}
-                                  onChange={(e) => updateSchemaField(field.id, 'required', e.target.checked)}
-                                  className="mt-2 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-slate-600 rounded"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-600 dark:text-slate-300 mb-1">Description</label>
-                                <input
-                                  type="text"
-                                  value={field.description}
-                                  onChange={(e) => updateSchemaField(field.id, 'description', e.target.value)}
-                                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md text-sm"
-                                  placeholder="Field description"
-                                />
-                              </div>
-                            </div>
-
-                            {/* Array Item Type */}
-                            {field.type === 'array' && (
-                              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                  <label className="block text-sm font-medium text-gray-600 dark:text-slate-300 mb-1">Array Item Type</label>
-                                  <select
-                                    value={field.arrayItemType}
-                                    onChange={(e) => updateSchemaField(field.id, 'arrayItemType', e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md text-sm"
-                                  >
-                                    <option value="string">Text</option>
-                                    <option value="number">Number</option>
-                                    <option value="object">Object</option>
-                                  </select>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Nested Object Fields */}
-                            {(field.type === 'object' || (field.type === 'array' && field.arrayItemType === 'object')) && (
-                              <div className="mt-4">
-                                <div className="flex items-center justify-between mb-2">
-                                  <label className="block text-sm font-medium text-gray-600 dark:text-slate-300">
-                                    {field.type === 'object' ? 'Object Properties' : 'Array Item Properties'}
-                                  </label>
-                                  <button
-                                    onClick={() => addNestedField(field.id)}
-                                    className="text-sm text-green-600 hover:text-green-700 flex items-center space-x-1"
-                                  >
-                                    <Plus className="h-3 w-3" />
-                                    <span>Add Property</span>
-                                  </button>
-                                </div>
-                                <div className="space-y-2 pl-4 border-l-2 border-gray-200 dark:border-slate-700">
-                                  {field.nestedFields?.map((nestedField) => (
-                                    <div key={nestedField.id} className="bg-gray-50 dark:bg-slate-800 rounded-md p-3">
-                                      <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-                                        <input
-                                          type="text"
-                                          value={nestedField.name}
-                                          onChange={(e) => updateNestedField(field.id, nestedField.id, 'name', e.target.value)}
-                                          className="px-2 py-1 border border-gray-300 dark:border-slate-600 rounded text-sm"
-                                          placeholder="Property name"
-                                        />
-                                        <select
-                                          value={nestedField.type}
-                                          onChange={(e) => updateNestedField(field.id, nestedField.id, 'type', e.target.value)}
-                                          className="px-2 py-1 border border-gray-300 dark:border-slate-600 rounded text-sm"
-                                        >
-                                          <option value="string">Text</option>
-                                          <option value="number">Number</option>
-                                          <option value="date">Date</option>
-                                          <option value="boolean">Yes/No</option>
-                                        </select>
-                                        <input
-                                          type="text"
-                                          value={nestedField.description}
-                                          onChange={(e) => updateNestedField(field.id, nestedField.id, 'description', e.target.value)}
-                                          className="px-2 py-1 border border-gray-300 dark:border-slate-600 rounded text-sm"
-                                          placeholder="Description"
-                                        />
-                                        <button
-                                          onClick={() => removeNestedField(field.id, nestedField.id)}
-                                          className="text-red-500 hover:text-red-700 transition-colors"
-                                        >
-                                          <Trash2 className="h-3 w-3" />
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                        <button
-                          onClick={addSchemaField}
-                          className="w-full border-2 border-dashed border-gray-300 dark:border-slate-600 rounded-lg p-4 text-gray-500 dark:text-slate-400 hover:border-gray-400 hover:text-gray-600 dark:text-slate-300 transition-colors"
-                        >
-                          <Plus className="h-5 w-5 mx-auto mb-2" />
-                          Add Field
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">JSON Schema</label>
-                          <textarea
-                            value={JSON.stringify(formData.output_schema, null, 2)}
-                            onChange={(e) => {
-                              try {
-                                const parsed = JSON.parse(e.target.value);
-                                setFormData({...formData, output_schema: parsed});
-                                // Sync with schema fields
-                                const fields = Object.entries(parsed).map(([name, def]) => ({
-                                  id: Math.random(),
-                                  name,
-                                  type: def.type || 'string',
-                                  required: def.required || false,
-                                  description: def.description || '',
-                                  default: def.default || '',
-                                  nestedFields: [],
-                                  arrayItemType: 'string'
-                                }));
-                                setSchemaFields(fields);
-                              } catch (err) {
-                                // Invalid JSON, don't update
-                              }
-                            }}
-                            className="w-full px-4 py-3 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 font-mono text-sm"
-                            rows={12}
-                            placeholder="Enter JSON schema..."
-                          />
-                        </div>
-                        <div className="text-sm text-gray-600 dark:text-slate-300">
-                          <p className="font-medium mb-1">Example schema format:</p>
-                          <pre className="bg-gray-100 dark:bg-slate-700 p-2 rounded text-xs overflow-x-auto">
-{`{
-  "field_name": {
-    "type": "string",
-    "required": true,
-    "description": "Field description"
-  }
-}`}
-                          </pre>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Test Section */}
-                  <div className="bg-orange-50 rounded-xl p-6">
-                    <h3 className="text-lg font-semibold mb-4 flex items-center">
-                      <TestTube className="h-5 w-5 mr-2 text-orange-600" />
-                      Test Extraction
-                    </h3>
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">Upload Test Document</label>
-                        <input
-                          type="file"
-                          onChange={(e) => setTestFile(e.target.files[0])}
-                          className="w-full px-4 py-3 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                          accept="image/*,.pdf,.txt"
-                        />
-                      </div>
-                      <button
-                        onClick={testExtraction}
-                        disabled={!testFile || testing}
-                        className="bg-orange-600 text-white px-6 py-3 rounded-lg flex items-center space-x-2 hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      >
-                        <TestTube className="h-4 w-4" />
-                        <span>{testing ? 'Testing...' : 'Test Extraction'}</span>
-                      </button>
-                    </div>
-
-                    {/* Test Results */}
-                    {showTestOutput && testResults && (
-                      <div className="mt-6 p-4 bg-white rounded-lg border border-orange-200">
-                        <h4 className="font-semibold mb-3">Test Results:</h4>
-                        {testResults.error ? (
-                          <div className="text-red-600">
-                            <p className="font-medium">Error:</p>
-                            <p className="text-sm">{testResults.error}</p>
+        {/* Document Types List */}
+        {!showCreateWizard && (
+                  <div className="space-y-6">
+            {docTypes.length === 0 ? (
+              <div className="text-center py-16 bg-gray-50 dark:bg-slate-800 rounded-xl border-2 border-dashed border-gray-300 dark:border-slate-600">
+                <FileText className="h-20 w-20 mx-auto mb-4 text-gray-500 dark:text-slate-400" />
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">No Document Types</h3>
+                <p className="text-gray-600 dark:text-slate-300 mb-6">Create your first document type to get started with automated extraction</p>
+                          <button
+                  onClick={startWizard}
+                  className="bg-gradient-to-r from-blue-600 to-accent-600 text-white px-8 py-3 rounded-xl flex items-center space-x-2 mx-auto hover:from-blue-700 hover:to-accent-700 transition-all shadow-lg"
+                          >
+                  <Plus className="h-5 w-5" />
+                  <span>Create Your First Type</span>
+                          </button>
                           </div>
                         ) : (
-                          <div className="space-y-2">
-                            {Object.entries(testResults.extracted_fields || {}).map(([field, data]) => (
-                              <div key={field} className="flex justify-between items-center py-2 border-b border-gray-100">
-                                <span className="font-medium text-gray-900 dark:text-white">{field}:</span>
-                                <div className="text-right">
-                                  <span className="text-gray-900 dark:text-white">{data.value || 'null'}</span>
-                                  <span className="text-sm text-gray-500 dark:text-slate-400 ml-2">
-                                    ({Math.round(data.confidence * 100)}% confident)
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {docTypes.map((docType) => (
+                  <div key={docType.id} className="group bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden hover:border-gray-300 dark:hover:border-slate-600 hover:shadow-lg transition-all duration-200">
+                    {/* Header */}
+                    <div className="px-6 py-4 border-b border-gray-100 dark:border-slate-700">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate mb-1">
+                            {docType.name}
+                          </h3>
+                          <p className="text-sm text-gray-600 dark:text-slate-300 line-clamp-2 leading-relaxed">
+                            {docType.description || 'Document processing configuration'}
+                          </p>
+                        </div>
+                        <div className="flex items-center space-x-2 ml-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => editDocType(docType)}
+                            className="p-2 text-gray-400 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                            title="Edit document type"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => deleteDocType(docType.id)}
+                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:text-slate-500 dark:hover:text-red-400 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                            title="Delete document type"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
                       </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="bg-gray-50 dark:bg-slate-800 px-8 py-6 border-t border-gray-200 dark:border-slate-700 flex justify-between">
-                <button
-                  onClick={closeEditModal}
-                  className="px-6 py-3 border border-gray-300 dark:border-slate-600 rounded-lg text-gray-900 dark:text-white hover:bg-gray-50 dark:bg-slate-800 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    createDocType().then(() => {
-                      if (!loading) {
-                        closeEditModal();
-                      }
-                    });
-                  }}
-                  disabled={loading}
-                  className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-8 py-3 rounded-lg flex items-center space-x-2 hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
-                >
-                  <Save className="h-4 w-4" />
-                  <span>{loading ? 'Saving...' : 'Save Changes'}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Templates (when not in wizard) */}
-        {!showCreateWizard && (
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-8 mb-8">
-            <h2 className="text-xl font-semibold mb-6 text-gray-900 dark:text-white">Quick Start Templates</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {Object.entries(templates).map(([key, template]) => (
-                <div key={key} className="group border-2 border-gray-200 dark:border-slate-700 rounded-xl p-6 hover:border-accent-400 hover:shadow-lg transition-all cursor-pointer bg-gray-50 dark:bg-slate-700 hover:bg-white dark:hover:bg-slate-600">
-                  <div className="text-center">
-                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-accent-500 rounded-xl flex items-center justify-center mx-auto mb-3">
-                      <FileText className="h-6 w-6 text-white" />
                     </div>
-                    <h3 className="font-semibold text-lg mb-2 text-gray-900 dark:text-white">{template.name}</h3>
-                    <p className="text-sm text-gray-600 dark:text-slate-300 mb-4">{template.description}</p>
-                    <button
-                      onClick={() => startWizard(key)}
-                      className="bg-gradient-to-r from-blue-600 to-accent-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2 mx-auto hover:from-blue-700 hover:to-accent-700 transition-colors"
-                    >
-                      <Copy className="h-4 w-4" />
-                      <span>Use Template</span>
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
-        {/* Existing Doc Types */}
-        {!showCreateWizard && (
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-8">
-            <h2 className="text-xl font-semibold mb-6 text-gray-900 dark:text-white">Your Document Types</h2>
-            {docTypes.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="w-20 h-20 bg-gradient-to-br from-blue-100 to-accent-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <FileText className="h-10 w-10 text-blue-600 dark:text-accent-400" />
-                </div>
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No document types yet</h3>
-                <p className="text-gray-600 dark:text-slate-300 mb-6">Create your first document type to start extracting data</p>
-                <button
-                  onClick={() => startWizard()}
-                  className="bg-gradient-to-r from-blue-600 to-accent-600 text-white px-6 py-3 rounded-lg hover:from-blue-700 hover:to-accent-700 transition-colors"
-                >
-                  Create Your First Type
-                </button>
-              </div>
-            ) : (
-              <div className="grid gap-6">
-                {docTypes.map(docType => (
-                  <div key={docType.id} className="border border-gray-200 dark:border-slate-700 rounded-xl p-6 hover:shadow-lg transition-all bg-gray-50 dark:bg-slate-700 hover:bg-white dark:hover:bg-slate-600">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-3 mb-3">
-                          <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-accent-100 dark:bg-accent-900 rounded-lg flex items-center justify-center">
-                            <FileText className="h-5 w-5 text-blue-600 dark:text-accent-400" />
+                    {/* Content */}
+                    <div className="p-6">
+                      {/* Key Metrics */}
+                      <div className="grid grid-cols-3 gap-4 mb-5">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
+                            {(() => {
+                              const sch = docType.output_schema || {};
+                              const props = sch.properties || sch;
+                              let count = Object.keys(props || {}).length;
+                              if (count === 0 && !sch.properties && typeof sch === 'object') {
+                                const arrKey = Object.keys(sch).find(k => sch[k] && sch[k].type === 'array');
+                                const arr = arrKey ? sch[arrKey] : null;
+                                if (arr && arr.items && arr.items.properties) {
+                                  count = Object.keys(arr.items.properties).length;
+                                }
+                              }
+                              return count;
+                            })()}
                           </div>
-                          <div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{docType.name}</h3>
-                            <p className="text-sm text-gray-600 dark:text-slate-300">{docType.description}</p>
+                          <div className="text-xs text-gray-500 dark:text-slate-400 uppercase tracking-wider font-medium">
+                            Fields
                           </div>
                         </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                          <div className="bg-gray-50 dark:bg-slate-800 p-3 rounded-lg">
-                            <div className="text-xs font-semibold text-gray-900 dark:text-white uppercase tracking-wide mb-1">Fields</div>
-                            <div className="text-lg font-bold text-accent-600 dark:text-accent-400">{Object.keys(docType.output_schema || {}).length}</div>
+                        <div className="text-center border-l border-r border-gray-200 dark:border-slate-700">
+                          <div className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
+                            {(docType.pipeline_config?.steps || []).length}
                           </div>
-                          <div className="bg-gray-50 dark:bg-slate-800 p-3 rounded-lg">
-                            <div className="text-xs font-semibold text-gray-900 dark:text-white uppercase tracking-wide mb-1">Status</div>
-                            <div className="text-sm font-medium text-green-600">
-                              ✓ Active
-                            </div>
-                          </div>
-                          <div className="bg-gray-50 dark:bg-slate-800 p-3 rounded-lg">
-                            <div className="text-xs font-semibold text-gray-900 dark:text-white uppercase tracking-wide mb-1">Created</div>
-                            <div className="text-sm text-gray-600 dark:text-slate-300">{new Date(docType.created_at).toLocaleDateString()}</div>
+                          <div className="text-xs text-gray-500 dark:text-slate-400 uppercase tracking-wider font-medium">
+                            Steps
                           </div>
                         </div>
-
-                        {Object.keys(docType.output_schema || {}).length > 0 && (
-                          <div>
-                            <div className="text-xs font-semibold text-gray-900 dark:text-white uppercase tracking-wide mb-2">Output Fields</div>
-                            <div className="flex flex-wrap gap-2">
-                              {Object.entries(docType.output_schema || {}).slice(0, 6).map(([name, def]) => (
-                                <span
-                                  key={name}
-                                  className={`text-xs px-3 py-1 rounded-full font-medium ${
-                                    def.required 
-                                      ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200 border border-red-200' 
-                                      : 'bg-gray-100 dark:bg-slate-700 text-gray-900 dark:text-white border border-gray-200 dark:border-slate-700'
-                                  }`}
-                                >
-                                  {name} ({def.type})
-                                </span>
-                              ))}
-                              {Object.keys(docType.output_schema || {}).length > 6 && (
-                                <span className="text-xs px-3 py-1 rounded-full bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400">
-                                  +{Object.keys(docType.output_schema).length - 6} more
-                                </span>
-                              )}
-                            </div>
+                        <div className="text-center">
+                          <div className="w-6 h-6 mx-auto mb-1">
+                            {docType.destination_webhook ? (
+                              <div className="w-full h-full bg-green-500 rounded-full flex items-center justify-center">
+                                <div className="w-2 h-2 bg-white rounded-full"></div>
+                              </div>
+                            ) : (
+                              <div className="w-full h-full border-2 border-gray-300 dark:border-slate-600 rounded-full"></div>
+                            )}
                           </div>
-                        )}
+                          <div className="text-xs text-gray-500 dark:text-slate-400 uppercase tracking-wider font-medium">
+                            Webhook
+                          </div>
+                        </div>
                       </div>
-                      
-                      <div className="flex space-x-2 ml-6">
-                        <button
-                          onClick={() => editDocType(docType)}
-                          className="text-blue-600 dark:text-accent-400 hover:text-blue-800 dark:hover:text-accent-200 hover:bg-blue-50 dark:hover:bg-slate-600 p-2 rounded-lg transition-colors"
-                          title="Edit"
-                        >
-                          <Edit className="h-5 w-5" />
-                        </button>
-                        <button
-                          onClick={() => deleteDocType(docType.id)}
-                          className="text-red-600 hover:text-red-800 hover:bg-red-50 dark:hover:bg-slate-600 p-2 rounded-lg transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 className="h-5 w-5" />
-                        </button>
+
+                      {/* Pipeline Info */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-700 dark:text-slate-300">Pipeline</span>
+                          <span className="text-sm text-gray-900 dark:text-white font-medium">
+                            {docType.pipeline_config?.name || 'Custom'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-700 dark:text-slate-300">Processing</span>
+                          <span className="text-sm text-gray-900 dark:text-white">
+                            {docType.pipeline_config?.parallel_processing ? 'Parallel' : 'Sequential'}
+                          </span>
+                        </div>
                       </div>
+
+                      {/* Edit Button */}
+                      <button
+                        onClick={() => editDocType(docType)}
+                        className="w-full mt-5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-4 py-2.5 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-50 transition-colors font-medium flex items-center justify-center space-x-2"
+                      >
+                        <Edit className="h-4 w-4" />
+                        <span>Configure</span>
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -2035,471 +2568,439 @@ const DocTypes = () => {
             )}
           </div>
         )}
+      </div>
+    </div>
+  );
+};
 
-        {/* Test Results Modal */}
-        {showTestOutput && testResults && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-4xl w-full mx-4 max-h-[80vh] overflow-hidden shadow-2xl">
-              <div className="bg-gradient-to-r from-purple-600 to-accent-600 text-white p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <TestTube className="h-6 w-6" />
-                    <h3 className="text-xl font-semibold">Extraction Test Results</h3>
-                  </div>
-                  <button
-                    onClick={() => setShowTestOutput(false)}
-                    className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors"
+// ===== SCHEMA BUILDER COMPONENT =====
+const SchemaBuilder = ({ fields, onFieldsChange, onSchemaChange }) => {
+  const addField = () => {
+    const newField = {
+      id: Math.random(),
+      name: 'new_field',
+      type: 'object',
+      required: false,
+      description: '',
+      default: '',
+      nestedFields: [],
+      arrayItemType: 'string'
+    };
+    onFieldsChange([...fields, newField]);
+  };
+
+  const updateField = (fieldId, property, value) => {
+    const updatedFields = fields.map(field =>
+      field.id === fieldId ? { ...field, [property]: value } : field
+    );
+    onFieldsChange(updatedFields);
+    updateSchemaFromFields(updatedFields);
+  };
+
+  const removeField = (fieldId) => {
+    const updatedFields = fields.filter(field => field.id !== fieldId);
+    onFieldsChange(updatedFields);
+    updateSchemaFromFields(updatedFields);
+  };
+
+  // Nested fields management for object fields and array-of-object item schemas
+  const addNestedField = (parentFieldId) => {
+    const updatedFields = fields.map(field => {
+      if (field.id !== parentFieldId) return field;
+      const nested = field.nestedFields ? [...field.nestedFields] : [];
+      nested.push({
+        id: Math.random(),
+        name: 'new_subfield',
+        type: 'string',
+        required: false,
+        description: '',
+        default: ''
+      });
+      return { ...field, nestedFields: nested };
+    });
+    onFieldsChange(updatedFields);
+    updateSchemaFromFields(updatedFields);
+  };
+
+  const updateNestedField = (parentFieldId, nestedFieldId, property, value) => {
+    const updatedFields = fields.map(field => {
+      if (field.id !== parentFieldId) return field;
+      const updatedNested = (field.nestedFields || []).map(nf =>
+        nf.id === nestedFieldId ? { ...nf, [property]: value } : nf
+      );
+      return { ...field, nestedFields: updatedNested };
+    });
+    onFieldsChange(updatedFields);
+    updateSchemaFromFields(updatedFields);
+  };
+
+  const removeNestedField = (parentFieldId, nestedFieldId) => {
+    const updatedFields = fields.map(field => {
+      if (field.id !== parentFieldId) return field;
+      const updatedNested = (field.nestedFields || []).filter(nf => nf.id !== nestedFieldId);
+      return { ...field, nestedFields: updatedNested };
+    });
+    onFieldsChange(updatedFields);
+    updateSchemaFromFields(updatedFields);
+  };
+
+  // Convenience: for arrays, ensure items are objects and add a nested item field
+  const addArrayItemField = (parentFieldId) => {
+    const updatedFields = fields.map(field => {
+      if (field.id !== parentFieldId) return field;
+      const nested = field.nestedFields ? [...field.nestedFields] : [];
+      nested.push({
+        id: Math.random(),
+        name: 'item_field',
+        type: 'string',
+        required: false,
+        description: '',
+        default: ''
+      });
+      return { ...field, arrayItemType: 'object', nestedFields: nested };
+    });
+    onFieldsChange(updatedFields);
+    updateSchemaFromFields(updatedFields);
+  };
+
+  const updateSchemaFromFields = (fields) => {
+    const buildNestedSchema = (nestedFields) => {
+      const schema = {};
+      nestedFields.forEach(field => {
+        if (field.name && field.name.trim()) {
+            schema[field.name] = {
+              type: field.type,
+              required: field.required,
+              description: field.description,
+              ...(field.default && { default: field.default })
+            };
+        }
+      });
+      return schema;
+    };
+
+    const schema = {};
+    fields.forEach(field => {
+      if (field.name && field.name.trim()) {
+        if (field.type === 'object' && field.nestedFields?.length > 0) {
+          schema[field.name] = {
+            type: 'object',
+            required: field.required,
+            description: field.description,
+            properties: buildNestedSchema(field.nestedFields)
+          };
+        } else if (field.type === 'array') {
+          const itemSchema = field.arrayItemType === 'object' && field.nestedFields?.length > 0
+            ? { type: 'object', properties: buildNestedSchema(field.nestedFields) }
+            : { type: field.arrayItemType || 'string' };
+          schema[field.name] = {
+            type: 'array',
+            required: field.required,
+            description: field.description,
+            items: itemSchema
+          };
+        } else {
+          schema[field.name] = {
+            type: field.type,
+            required: field.required,
+            description: field.description,
+            ...(field.default && { default: field.default })
+          };
+        }
+      }
+    });
+    onSchemaChange(schema);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h6 className="font-medium text-gray-900 dark:text-white">Field Builder</h6>
+        <button
+          onClick={addField}
+          className="bg-accent-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-accent-700 transition-colors flex items-center space-x-1"
+        >
+          <Plus className="h-4 w-4" />
+          <span>Add Field</span>
+        </button>
+      </div>
+
+      {fields.length === 0 ? (
+        <div className="text-center py-8 border-2 border-dashed border-gray-300 dark:border-slate-600 rounded-lg">
+          <FileText className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+          <p className="text-sm text-gray-500 dark:text-slate-400">No fields defined yet</p>
+          <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">Click "Add Field" to get started</p>
+        </div>
+      ) : (
+        <div className="space-y-3 max-h-64 overflow-y-auto">
+          {fields.map((field, index) => (
+            <div key={field.id} className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-600 rounded-lg p-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Field Name</label>
+                  <input
+                    type="text"
+                    value={field.name}
+                    onChange={(e) => updateField(field.id, 'name', e.target.value)}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-slate-600 rounded focus:border-accent-500 focus:outline-none bg-white dark:bg-slate-800"
+                    placeholder="field_name"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Type</label>
+                  <select
+                    value={field.type === 'object' || field.type === 'array' ? field.type : 'object'}
+                    onChange={(e) => updateField(field.id, 'type', e.target.value)}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-slate-600 rounded focus:border-accent-500 focus:outline-none bg-white dark:bg-slate-800"
                   >
-                    ✕
+                    <option value="object">Record</option>
+                    <option value="array">Array</option>
+                  </select>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id={`required-${field.id}`}
+                    checked={field.required}
+                    onChange={(e) => updateField(field.id, 'required', e.target.checked)}
+                    className="rounded border-gray-300 dark:border-slate-600"
+                  />
+                  <label htmlFor={`required-${field.id}`} className="text-xs text-gray-700 dark:text-slate-300">Required</label>
+                </div>
+                <div className="flex items-center justify-end">
+                  <button
+                    onClick={() => removeField(field.id)}
+                    className="text-red-500 hover:text-red-700 p-1 rounded transition-colors"
+                    title="Remove field"
+                  >
+                    <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
               </div>
 
-              <div className="p-6 overflow-y-auto max-h-96">
-                {testResults.test_status === 'success' ? (
-                  <div className="space-y-6">
-                    {Object.keys(testResults.extracted_fields || {}).length > 0 ? (
-                      <>
-                        <div className="flex items-center space-x-3 p-4 bg-green-50 border border-green-200 rounded-lg">
-                          <CheckCircle className="h-6 w-6 text-green-600" />
-                          <div>
-                            <div className="font-semibold text-green-800">Extraction Successful!</div>
-                            <div className="text-sm text-green-600">
-                              Found {Object.keys(testResults.extracted_fields).length} fields in your document
-                            </div>
-                          </div>
-                        </div>
-
-                        <div>
-                          <h4 className="font-semibold mb-3 text-gray-900 dark:text-white">📄 Extracted JSON Output</h4>
-                          <div className="bg-gray-900 rounded-lg p-4 overflow-auto">
-                            <pre className="text-green-400 text-sm font-mono">
-{JSON.stringify(testResults.extracted_fields, null, 2)}
-                            </pre>
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="space-y-4">
-                        <div className="flex items-center space-x-3 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                          <div className="w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center flex-shrink-0">
-                            <span className="text-white font-bold text-sm">!</span>
-                          </div>
-                          <div>
-                            <div className="font-semibold text-yellow-800">No Data Extracted</div>
-                            <div className="text-sm text-yellow-700">
-                              The extraction completed but no fields were found in your document
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                          <h5 className="font-semibold text-accent-800 dark:text-accent-200 mb-2">💡 Possible Solutions:</h5>
-                          <ul className="text-sm text-blue-700 space-y-1 list-disc list-inside">
-                            <li>Make sure your test document matches the document type you created</li>
-                            <li>Check that your extraction instructions are specific enough</li>
-                            <li>Try with a clearer, higher-quality document</li>
-                            <li>For load sheets, ensure the document has the header fields and table data</li>
-                          </ul>
-                        </div>
-
-                        <div>
-                          <h4 className="font-semibold mb-3 text-gray-900 dark:text-white">📄 Raw Response</h4>
-                          <div className="bg-gray-900 rounded-lg p-4 overflow-auto">
-                            <pre className="text-gray-400 text-sm font-mono">
-{JSON.stringify(testResults.extracted_fields || {}, null, 2)}
-                            </pre>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {testResults.schema_compliance && (
-                      <div>
-                        <h4 className="font-semibold mb-3 text-gray-900 dark:text-white">✅ Schema Validation</h4>
-                        <div className={`p-4 rounded-lg border-2 ${
-                          testResults.schema_compliance.valid 
-                            ? 'bg-green-50 border-green-200 text-green-800' 
-                            : 'bg-orange-50 border-orange-200 text-orange-800'
-                        }`}>
-                          {testResults.schema_compliance.valid ? (
-                            <div className="flex items-center space-x-2">
-                              <CheckCircle className="h-5 w-5 text-green-600" />
-                              <span className="font-medium">All required fields extracted successfully</span>
-                            </div>
-                          ) : (
-                            <div className="space-y-2">
-                              <div className="font-medium">⚠️ Schema validation issues found:</div>
-                              {testResults.schema_compliance.missing_required.length > 0 && (
-                                <div className="text-sm">
-                                  <strong>Missing required fields:</strong> {testResults.schema_compliance.missing_required.join(', ')}
-                                </div>
-                              )}
-                              {testResults.schema_compliance.type_mismatches.length > 0 && (
-                                <div className="text-sm">
-                                  <strong>Type mismatches:</strong> {testResults.schema_compliance.type_mismatches.join(', ')}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <span className="text-red-600 text-2xl">⚠</span>
-                    </div>
-                    <h4 className="font-semibold text-red-800 mb-2">Extraction Failed</h4>
-                    <div className="text-sm bg-red-50 p-4 rounded-lg border border-red-200 max-w-md mx-auto">
-                      {testResults.error}
-                    </div>
-                  </div>
-                )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Description</label>
+                  <input
+                    type="text"
+                    value={field.description}
+                    onChange={(e) => updateField(field.id, 'description', e.target.value)}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-slate-600 rounded focus:border-accent-500 focus:outline-none bg-white dark:bg-slate-800"
+                    placeholder="Field description"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Default Value</label>
+                  <input
+                    type="text"
+                    value={field.default}
+                    onChange={(e) => updateField(field.id, 'default', e.target.value)}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-slate-600 rounded focus:border-accent-500 focus:outline-none bg-white dark:bg-slate-800"
+                    placeholder="Default value (optional)"
+                  />
+                </div>
               </div>
-            </div>
-          </div>
-        )}
 
-        {/* Schema Editor Modal */}
-        {showSchemaEditor && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl max-w-7xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
-              {/* Modal Header */}
-              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <Code className="h-6 w-6" />
-                    <h3 className="text-xl font-semibold">Schema Editor</h3>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <div className="flex border border-white/30 rounded-lg overflow-hidden">
-                      <button
-                        onClick={() => setSchemaMode('builder')}
-                        className={`px-4 py-2 flex items-center space-x-2 transition-all ${
-                          schemaMode === 'builder' 
-                            ? 'bg-white text-accent-600 dark:text-accent-400' 
-                            : 'text-white hover:bg-white/20'
-                        }`}
+              {field.type === 'array' && (
+                <div className="mt-3 pt-3 border-t border-gray-200 dark:border-slate-700">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-2">Array Item Type</label>
+                      <select
+                        value={field.arrayItemType}
+                        onChange={(e) => updateField(field.id, 'arrayItemType', e.target.value)}
+                        className="px-2 py-1 text-sm border border-gray-300 dark:border-slate-600 rounded focus:border-accent-500 focus:outline-none bg-white dark:bg-slate-800"
                       >
-                        <Eye className="h-4 w-4" />
-                        <span>Visual Builder</span>
-                      </button>
-                      <button
-                        onClick={() => setSchemaMode('json')}
-                        className={`px-4 py-2 flex items-center space-x-2 transition-all ${
-                          schemaMode === 'json' 
-                            ? 'bg-white text-accent-600 dark:text-accent-400' 
-                            : 'text-white hover:bg-white/20'
-                        }`}
-                      >
-                        <Code className="h-4 w-4" />
-                        <span>JSON Editor</span>
-                      </button>
+                        <option value="string">String</option>
+                        <option value="number">Number</option>
+                        <option value="boolean">Boolean</option>
+                        <option value="date">Date</option>
+                        <option value="object">Object</option>
+                      </select>
                     </div>
                     <button
-                      onClick={() => setShowSchemaEditor(false)}
-                      className="text-white hover:bg-white/20 p-2 rounded-lg transition-colors"
+                      onClick={() => addArrayItemField(field.id)}
+                      className="bg-accent-600 text-white px-2 py-1 rounded text-xs mt-6 hover:bg-accent-700"
+                      title="Add a field to the array item (switches items to objects if needed)"
                     >
-                      ✕
+                      + Add Item Field
                     </button>
                   </div>
                 </div>
-              </div>
+              )}
 
-              {/* Modal Content */}
-              <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
-                {schemaMode === 'builder' ? (
-                  <div className="space-y-6">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Output Fields</h4>
-                        <p className="text-sm text-gray-600 dark:text-slate-300">Define the fields to extract from your documents</p>
-                      </div>
-                      <button
-                        onClick={addSchemaField}
-                        className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-6 py-3 rounded-lg flex items-center space-x-2 hover:from-green-700 hover:to-emerald-700 transition-colors shadow-lg"
-                      >
-                        <Plus className="h-5 w-5" />
-                        <span>Add Field</span>
-                      </button>
+              {/* Nested fields for object and array-of-object */}
+              {(field.type === 'object' || (field.type === 'array' && field.arrayItemType === 'object')) && (
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-slate-700">
+                  <div className="flex items-center justify-between mb-2">
+                    <h6 className="text-xs font-semibold text-gray-800 dark:text-slate-200">
+                      {field.type === 'object' ? 'Object Fields' : 'Array Item Fields'}
+                    </h6>
+                    <button
+                      onClick={() => addNestedField(field.id)}
+                      className="bg-accent-600 text-white px-2 py-1 rounded text-xs hover:bg-accent-700"
+                    >
+                      Add Field
+                    </button>
+                  </div>
+                  {(field.nestedFields || []).length === 0 ? (
+                    <div className="text-center py-4 border-2 border-dashed border-gray-300 dark:border-slate-600 rounded-lg text-xs text-gray-500 dark:text-slate-400">
+                      No fields yet. Click "Add Field" to define {field.type === 'object' ? 'object properties' : 'array item properties'}.
                     </div>
-
-                    <div className="grid gap-6">
-                      {schemaFields.map(field => (
-                        <div key={field.id} className="bg-gray-50 dark:bg-slate-800 border-2 border-gray-200 dark:border-slate-700 rounded-xl p-6 hover:border-gray-300 dark:border-slate-600 transition-colors">
-                          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-4">
+                  ) : (
+                    <div className="space-y-2">
+                      {(field.nestedFields || []).map(nf => (
+                        <div key={nf.id} className="bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded p-3">
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2 items-start">
                             <div>
-                              <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">Field Name</label>
+                              <label className="block text-[10px] font-medium text-gray-700 dark:text-slate-300 mb-1">Name</label>
                               <input
-                                value={field.name}
-                                onChange={(e) => updateSchemaField(field.id, 'name', e.target.value)}
-                                className="w-full border-2 border-gray-300 dark:border-slate-600 p-3 rounded-lg focus:border-accent-500 focus:outline-none"
-                                placeholder="field_name"
+                                type="text"
+                                value={nf.name}
+                                onChange={(e) => updateNestedField(field.id, nf.id, 'name', e.target.value)}
+                                className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800"
+                                placeholder="subfield_name"
                               />
                             </div>
                             <div>
-                              <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">Data Type</label>
+                              <label className="block text-[10px] font-medium text-gray-700 dark:text-slate-300 mb-1">Type</label>
                               <select
-                                value={field.type}
-                                onChange={(e) => updateSchemaField(field.id, 'type', e.target.value)}
-                                className="w-full border-2 border-gray-300 dark:border-slate-600 p-3 rounded-lg focus:border-accent-500 focus:outline-none"
+                                value={nf.type}
+                                onChange={(e) => updateNestedField(field.id, nf.id, 'type', e.target.value)}
+                                className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800"
                               >
-                                <option value="string">📝 Text</option>
-                                <option value="number">🔢 Number</option>
-                                <option value="date">📅 Date</option>
-                                <option value="boolean">☑️ Yes/No</option>
-                                <option value="object">📦 Object</option>
-                                <option value="array">📋 List</option>
+                                <option value="string">String</option>
+                                <option value="number">Number</option>
+                                <option value="boolean">Boolean</option>
+                                <option value="date">Date</option>
+                                <option value="array">Array</option>
+                                <option value="object">Object</option>
                               </select>
                             </div>
-                            <div className="flex items-end">
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                id={`nf-required-${nf.id}`}
+                                checked={nf.required}
+                                onChange={(e) => updateNestedField(field.id, nf.id, 'required', e.target.checked)}
+                                className="rounded border-gray-300 dark:border-slate-600"
+                              />
+                              <label htmlFor={`nf-required-${nf.id}`} className="text-[10px] text-gray-700 dark:text-slate-300">Required</label>
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-medium text-gray-700 dark:text-slate-300 mb-1">Description</label>
+                              <input
+                                type="text"
+                                value={nf.description}
+                                onChange={(e) => updateNestedField(field.id, nf.id, 'description', e.target.value)}
+                                className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800"
+                                placeholder="Description"
+                              />
+                            </div>
+                            <div className="flex items-center justify-end">
                               <button
-                                onClick={() => removeSchemaField(field.id)}
-                                className="w-full bg-red-500 text-white p-3 rounded-lg hover:bg-red-600 transition-colors flex items-center justify-center space-x-2"
+                                onClick={() => removeNestedField(field.id, nf.id)}
+                                className="text-red-500 hover:text-red-700 p-1 rounded"
+                                title="Remove nested field"
                               >
                                 <Trash2 className="h-4 w-4" />
-                                <span>Remove</span>
                               </button>
                             </div>
                           </div>
-                          
-                          <div className="mb-4">
-                            <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">Description</label>
+                          <div className="mt-2">
+                            <label className="block text-[10px] font-medium text-gray-700 dark:text-slate-300 mb-1">Default</label>
                             <input
-                              value={field.description}
-                              onChange={(e) => updateSchemaField(field.id, 'description', e.target.value)}
-                              className="w-full border-2 border-gray-300 dark:border-slate-600 p-3 rounded-lg focus:border-accent-500 focus:outline-none"
-                              placeholder="What this field represents..."
+                              type="text"
+                              value={nf.default}
+                              onChange={(e) => updateNestedField(field.id, nf.id, 'default', e.target.value)}
+                              className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800"
+                              placeholder="Default value (optional)"
                             />
                           </div>
-
-                          <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center space-x-6">
-                              <label className="flex items-center space-x-3">
-                                <input
-                                  type="checkbox"
-                                  checked={field.required}
-                                  onChange={(e) => updateSchemaField(field.id, 'required', e.target.checked)}
-                                  className="h-5 w-5 text-accent-600 dark:text-accent-400 rounded focus:ring-accent-500"
-                                />
-                                <span className={`font-medium ${field.required ? 'text-red-600' : 'text-gray-600 dark:text-slate-300'}`}>
-                                  {field.required ? '🔴 Required Field' : '⚪ Optional Field'}
-                                </span>
-                              </label>
-                              
-                              {field.type === 'string' && (
-                                <div className="flex items-center space-x-2">
-                                  <label className="text-sm text-gray-600 dark:text-slate-300">Default Value:</label>
-                                  <input
-                                    value={field.default}
-                                    onChange={(e) => updateSchemaField(field.id, 'default', e.target.value)}
-                                    className="border border-gray-300 dark:border-slate-600 p-2 rounded text-sm w-24"
-                                    placeholder="USD"
-                                  />
-                                </div>
-                              )}
-                              
-                              {field.type === 'array' && (
-                                <div className="flex items-center space-x-2">
-                                  <label className="text-sm text-gray-600 dark:text-slate-300">Array Item Type:</label>
-                                  <select
-                                    value={field.arrayItemType || 'string'}
-                                    onChange={(e) => updateSchemaField(field.id, 'arrayItemType', e.target.value)}
-                                    className="border border-gray-300 dark:border-slate-600 p-2 rounded text-sm"
-                                  >
-                                    <option value="string">Text</option>
-                                    <option value="number">Number</option>
-                                    <option value="date">Date</option>
-                                    <option value="boolean">Yes/No</option>
-                                    <option value="object">Object</option>
-                                  </select>
-                                </div>
-                              )}
-                            </div>
-
-                            {(field.type === 'object' || (field.type === 'array' && field.arrayItemType === 'object')) && (
-                              <button
-                                onClick={() => toggleObjectExpansion(field.id)}
-                                className="bg-accent-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-accent-700 transition-colors"
-                              >
-                                {expandedObjects.has(field.id) ? '▼ Collapse' : '▶ Expand'} 
-                                {field.type === 'object' ? ' Fields' : ' Item Schema'}
-                              </button>
-                            )}
-                          </div>
-
-                          {/* Nested Fields Editor */}
-                          {(field.type === 'object' || (field.type === 'array' && field.arrayItemType === 'object')) && expandedObjects.has(field.id) && (
-                            <div className="mt-6 p-6 bg-blue-50 border-2 border-blue-200 rounded-xl">
-                              <div className="flex items-center justify-between mb-4">
-                                <h5 className="text-lg font-medium text-accent-800 dark:text-accent-200">
-                                  {field.type === 'object' ? 'Object Properties' : 'Array Item Properties'}
-                                </h5>
-                                <button
-                                  onClick={() => addNestedField(field.id)}
-                                  className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2 hover:from-green-700 hover:to-emerald-700 transition-colors"
-                                >
-                                  <Plus className="h-4 w-4" />
-                                  <span>Add Property</span>
-                                </button>
-                              </div>
-
-                              <div className="space-y-4">
-                                {(field.nestedFields || []).map(nestedField => (
-                                  <div key={nestedField.id} className="bg-white border border-blue-200 rounded-lg p-4">
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
-                                      <div>
-                                        <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-1">Property Name</label>
-                                        <input
-                                          value={nestedField.name}
-                                          onChange={(e) => updateNestedField(field.id, nestedField.id, 'name', e.target.value)}
-                                          className="w-full border border-gray-300 dark:border-slate-600 p-2 rounded"
-                                          placeholder="property_name"
-                                        />
-                                      </div>
-                                      <div>
-                                        <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-1">Type</label>
-                                        <select
-                                          value={nestedField.type}
-                                          onChange={(e) => updateNestedField(field.id, nestedField.id, 'type', e.target.value)}
-                                          className="w-full border border-gray-300 dark:border-slate-600 p-2 rounded"
-                                        >
-                                          <option value="string">📝 Text</option>
-                                          <option value="number">🔢 Number</option>
-                                          <option value="date">📅 Date</option>
-                                          <option value="boolean">☑️ Yes/No</option>
-                                          <option value="array">📋 List</option>
-                                        </select>
-                                      </div>
-                                      <div className="flex items-end">
-                                        <button
-                                          onClick={() => removeNestedField(field.id, nestedField.id)}
-                                          className="w-full bg-red-500 text-white p-2 rounded hover:bg-red-600 transition-colors"
-                                        >
-                                          <Trash2 className="h-4 w-4 mx-auto" />
-                                        </button>
-                                      </div>
-                                    </div>
-
-                                    <div className="mb-3">
-                                      <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-1">Description</label>
-                                      <input
-                                        value={nestedField.description}
-                                        onChange={(e) => updateNestedField(field.id, nestedField.id, 'description', e.target.value)}
-                                        className="w-full border border-gray-300 dark:border-slate-600 p-2 rounded"
-                                        placeholder="What this property represents..."
-                                      />
-                                    </div>
-
-                                    <div className="flex items-center space-x-4">
-                                      <label className="flex items-center space-x-2">
-                                        <input
-                                          type="checkbox"
-                                          checked={nestedField.required}
-                                          onChange={(e) => updateNestedField(field.id, nestedField.id, 'required', e.target.checked)}
-                                          className="h-4 w-4 text-accent-600 dark:text-accent-400 rounded"
-                                        />
-                                        <span className={`text-sm ${nestedField.required ? 'text-red-600' : 'text-gray-600 dark:text-slate-300'}`}>
-                                          {nestedField.required ? 'Required' : 'Optional'}
-                                        </span>
-                                      </label>
-                                      {nestedField.type === 'string' && (
-                                        <div className="flex items-center space-x-2">
-                                          <label className="text-sm text-gray-600 dark:text-slate-300">Default:</label>
-                                          <input
-                                            value={nestedField.default}
-                                            onChange={(e) => updateNestedField(field.id, nestedField.id, 'default', e.target.value)}
-                                            className="border border-gray-300 dark:border-slate-600 p-1 rounded text-sm w-20"
-                                            placeholder="value"
-                                          />
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                ))}
-
-                                {(field.nestedFields || []).length === 0 && (
-                                  <div className="text-center py-8 bg-white rounded-lg border-2 border-dashed border-blue-300">
-                                    <FileText className="h-12 w-12 mx-auto mb-3 text-blue-300" />
-                                    <p className="text-accent-600 dark:text-accent-400 mb-3">No nested properties defined</p>
-                                    <button
-                                      onClick={() => addNestedField(field.id)}
-                                      className="bg-accent-600 text-white px-4 py-2 rounded-lg hover:bg-accent-700 transition-colors"
-                                    >
-                                      Add First Property
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )}
                         </div>
                       ))}
                     </div>
-
-                    {schemaFields.length === 0 && (
-                      <div className="text-center py-16 bg-gray-50 dark:bg-slate-800 rounded-xl border-2 border-dashed border-gray-300 dark:border-slate-600">
-                        <FileText className="h-20 w-20 mx-auto mb-4 text-gray-500 dark:text-slate-400" />
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Fields Defined</h3>
-                        <p className="text-gray-600 dark:text-slate-300 mb-6">Start building your schema by adding your first field</p>
-                        <button
-                          onClick={addSchemaField}
-                          className="bg-accent-600 text-white px-6 py-3 rounded-lg hover:bg-accent-700 transition-colors flex items-center space-x-2 mx-auto"
-                        >
-                          <Plus className="h-5 w-5" />
-                          <span>Add Your First Field</span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div>
-                      <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">JSON Schema Editor</h4>
-                      <p className="text-sm text-gray-600 dark:text-slate-300">Edit the raw JSON schema directly</p>
-                    </div>
-                    <textarea
-                      value={JSON.stringify(formData.output_schema, null, 2)}
-                      onChange={(e) => {
-                        try {
-                          const parsed = JSON.parse(e.target.value);
-                          setFormData(prev => ({ ...prev, output_schema: parsed }));
-                        } catch (err) {
-                          // Invalid JSON, don't update
-                        }
-                      }}
-                      className="w-full border-2 border-gray-300 dark:border-slate-600 p-4 rounded-lg font-mono text-sm h-96 focus:border-accent-500 focus:outline-none"
-                      placeholder='{\n  "field_name": {\n    "type": "string",\n    "required": true,\n    "description": "Field description"\n  }\n}'
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Modal Footer */}
-              <div className="bg-gray-50 dark:bg-slate-800 px-6 py-4 border-t border-gray-200 dark:border-slate-700 flex justify-between items-center">
-                <div className="text-sm text-gray-600 dark:text-slate-300">
-                  {schemaFields.length} field{schemaFields.length !== 1 ? 's' : ''} defined
+                  )}
                 </div>
-                <div className="flex space-x-3">
-                  <button
-                    onClick={() => setShowSchemaEditor(false)}
-                    className="border-2 border-gray-300 dark:border-slate-600 px-6 py-2 rounded-lg hover:bg-gray-50 dark:bg-slate-800 transition-colors"
-                  >
-                    Close
-                  </button>
-                  <button
-                    onClick={() => setShowSchemaEditor(false)}
-                    className="bg-accent-600 text-white px-6 py-2 rounded-lg hover:bg-accent-700 transition-colors"
-                  >
-                    Save & Close
-                  </button>
-                </div>
-              </div>
+              )}
             </div>
-          </div>
-        )}
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ===== JSON SCHEMA EDITOR COMPONENT =====
+const SchemaJsonEditor = ({ schema, onSchemaChange }) => {
+  const [jsonText, setJsonText] = useState(JSON.stringify(schema, null, 2));
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    setJsonText(JSON.stringify(schema, null, 2));
+    setError(null);
+  }, [schema]);
+
+  const handleJsonChange = (value) => {
+    setJsonText(value);
+    try {
+      const parsed = JSON.parse(value);
+      onSchemaChange(parsed);
+      setError(null);
+    } catch (e) {
+      setError('Invalid JSON syntax');
+    }
+  };
+
+  const formatJson = () => {
+    try {
+      const parsed = JSON.parse(jsonText);
+      const formatted = JSON.stringify(parsed, null, 2);
+      setJsonText(formatted);
+      onSchemaChange(parsed);
+      setError(null);
+    } catch (e) {
+      setError('Invalid JSON - cannot format');
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h6 className="font-medium text-gray-900 dark:text-white">JSON Schema Editor</h6>
+        <button
+          onClick={formatJson}
+          className="bg-gray-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-gray-700 transition-colors"
+        >
+          Format JSON
+        </button>
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg text-sm">
+          {error}
+        </div>
+      )}
+
+      <div className="relative">
+        <textarea
+          value={jsonText}
+          onChange={(e) => handleJsonChange(e.target.value)}
+          className={`w-full h-64 p-4 text-sm font-mono border rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 ${
+            error
+              ? 'border-red-300 bg-red-50 dark:bg-red-900/10'
+              : 'border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800'
+          }`}
+          placeholder="Enter your JSON schema here..."
+          spellCheck={false}
+        />
+        <div className="absolute bottom-2 right-2 text-xs text-gray-400">
+          {jsonText.split('\n').length} lines
+        </div>
+      </div>
+
+      <div className="text-xs text-gray-500 dark:text-slate-400">
+        💡 Tip: Use the Format JSON button to pretty-print your schema. Make sure your JSON is valid before proceeding.
       </div>
     </div>
   );

@@ -21,7 +21,31 @@ def validate_document_content(content: str, mime_type: str) -> bool:
 
     elif mime_type == "application/pdf":
         # PDF validation - should contain PDF header
-        return content.startswith("%PDF-") or b"%PDF-" in content.encode("latin1")
+        # Handle both raw PDF and base64 encoded PDF
+        print(f"DEBUG: Validating PDF content, length: {len(content)}")
+        if content.startswith("%PDF-"):
+            # Raw PDF content
+            print("DEBUG: Found raw PDF header")
+            return True
+        elif len(content) > 100:  # Minimum reasonable base64 length
+            try:
+                # Try to decode as base64 and check for PDF header
+                import base64
+                decoded = base64.b64decode(content)
+                print(f"DEBUG: Decoded base64 content length: {len(decoded)}")
+                if decoded.startswith(b"%PDF-"):
+                    print("DEBUG: Found PDF header in decoded base64")
+                    return True
+                else:
+                    print(f"DEBUG: No PDF header found. Content starts with: {decoded[:20] if decoded else 'empty'}")
+                    return False
+            except Exception as e:
+                # If base64 decode fails, it's not valid
+                print(f"DEBUG: Base64 decode failed: {e}")
+                return False
+        else:
+            print(f"DEBUG: Content too short for PDF validation: {len(content)}")
+        return False
 
     elif mime_type.startswith("text/"):
         # Text files should have reasonable content

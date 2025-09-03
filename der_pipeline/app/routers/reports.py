@@ -1,10 +1,19 @@
-"""Reports router - Consolidated document processing reports."""
+"""Reports router - Consolidated document processing reports and utilities."""
 
 from fastapi import APIRouter, HTTPException
 
 from ..db import get_session_sync
-from ..enums import ReconcileStrategy
-from ..models import Document
+from ..enums import PipelineState, ReconcileStrategy
+from ..models import (
+    Document,
+    CustomDocTypeDefinition,
+    Extraction,
+    HilCorrection,
+    FetchJob,
+    ReconciliationResult,
+    FinalDecision,
+    AuditTrail,
+)
 from ..schemas import DocumentReport, ReconcileResponse
 from ..services.audit import AuditService
 from ..services.fetch_service import FetchService
@@ -70,22 +79,73 @@ async def get_document_report(document_id: int):
 
     # Format extracted data
     latest_extraction = None
+    # Track custom pipeline info
+    pipeline_step_types: list[str] | None = None
+    pipeline_custom_doc_type_name: str | None = None
     if hil_data.get("extraction"):
-        latest_extraction = {}
-        for k, v in hil_data["extraction"].raw_json.items():
-            if isinstance(v, dict):
-                latest_extraction[k] = {
-                    "value": v.get("value", v),  # Use the whole value if no "value" key exists
-                    "confidence": v.get("confidence", 1.0),
-                    "type_hint": v.get("type_hint", "string"),
-                }
+        payload = hil_data["extraction"].raw_json or {}
+        # Our ExtractionService stores fields under 'instructed_fields' and 'all_fields'. Prefer instructed_fields.
+        if isinstance(payload, dict):
+            fields_map = None
+            if isinstance(payload.get("instructed_fields"), dict):
+                fields_map = payload.get("instructed_fields")
+            elif isinstance(payload.get("all_fields"), dict):
+                fields_map = payload.get("all_fields")
             else:
-                # Handle simple values that aren't structured as objects
-                latest_extraction[k] = {
-                    "value": v,
-                    "confidence": 1.0,
-                    "type_hint": "string",
-                }
+                # Backward compatibility: treat entire payload as fields
+                fields_map = payload
+
+            latest_extraction = {}
+            for k, v in fields_map.items():
+                if isinstance(v, dict) and "value" in v:
+                    latest_extraction[k] = {
+                        "value": v.get("value"),
+                        "confidence": v.get("confidence", 1.0),
+                        "type_hint": v.get("type_hint", "string"),
+                    }
+                else:
+                    # Handle simple values that aren't structured as objects
+                    latest_extraction[k] = {
+                        "value": v,
+                        "confidence": 1.0,
+                        "type_hint": "string",
+                    }
+
+            # Determine custom pipeline config from meta
+            try:
+                mode_meta = None
+                name_meta = None
+                x = latest_extraction
+                # Accept both raw meta and nested value forms
+                if isinstance(x.get("_extraction_mode"), dict):
+                    mode_meta = x.get("_extraction_mode", {}).get("value")
+                else:
+                    mode_meta = x.get("_extraction_mode")
+                if isinstance(x.get("_custom_doc_type_name"), dict):
+                    name_meta = x.get("_custom_doc_type_name", {}).get("value")
+                else:
+                    name_meta = x.get("_custom_doc_type_name")
+                pipeline_custom_doc_type_name = name_meta
+                is_custom = (mode_meta or "").lower().find("custom") >= 0 or bool(name_meta)
+                if is_custom:
+                    with get_session_sync() as session:
+                        cfg = (
+                            session.query(CustomDocTypeDefinition)
+                            .filter(CustomDocTypeDefinition.tenant_id == document.tenant_id)
+                            .filter(CustomDocTypeDefinition.name == name_meta)
+                            .first()
+                        )
+                        if cfg and isinstance(cfg.pipeline_config, dict):
+                            steps = cfg.pipeline_config.get("steps") or []
+                            pipeline_step_types = [s.get("step_type") for s in steps if isinstance(s, dict) and s.get("step_type")]
+                            logger.info(f"DEBUG: Found custom pipeline config with steps: {pipeline_step_types}")
+                        # Fallback minimal pipeline for custom without config
+                        if not pipeline_step_types:
+                            pipeline_step_types = ["hil", "send"]
+                            logger.info(f"DEBUG: Using fallback pipeline_step_types: {pipeline_step_types}")
+            except Exception:
+                # Non-fatal
+                pass
 
     # Format corrected data
     latest_correction = None
@@ -143,4 +203,40 @@ async def get_document_report(document_id: int):
         ),
         final_decision=final_decision_response,
         audit_trail=formatted_audit,
+        pipeline_step_types=pipeline_step_types,
+        pipeline_custom_doc_type_name=pipeline_custom_doc_type_name,
     )
+
+
+@router.delete("/reports/documents/{document_id}")
+async def delete_document(document_id: int):
+    """Delete a document and its related records if it's not finalized.
+
+    Allowed when state is not APPROVED or REJECTED. This helps clean up pending/test uploads.
+    """
+
+    with get_session_sync() as session:
+        doc = session.get(Document, document_id)
+        if not doc:
+            raise HTTPException(status_code=404, detail=f"Document {document_id} not found")
+
+        if doc.state in (PipelineState.APPROVED, PipelineState.REJECTED):
+            raise HTTPException(
+                status_code=409,
+                detail=f"Document {document_id} is finalized and cannot be deleted",
+            )
+
+        # Delete child rows first to satisfy FK constraints
+        session.query(Extraction).filter(Extraction.document_id == document_id).delete()
+        session.query(HilCorrection).filter(HilCorrection.document_id == document_id).delete()
+        session.query(FetchJob).filter(FetchJob.document_id == document_id).delete()
+        session.query(ReconciliationResult).filter(
+            ReconciliationResult.document_id == document_id
+        ).delete()
+        session.query(FinalDecision).filter(FinalDecision.document_id == document_id).delete()
+        session.query(AuditTrail).filter(AuditTrail.document_id == document_id).delete()
+
+        session.delete(doc)
+        session.commit()
+
+        return {"status": "deleted", "document_id": document_id}

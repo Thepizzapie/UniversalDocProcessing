@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Bug, Brain, AlertTriangle, CheckCircle, Clock, ChevronDown, ChevronRight } from 'lucide-react';
 import { apiService } from '../services/api';
 
@@ -10,20 +10,20 @@ const DebugPanel = ({ documentId, currentStage, documentData }) => {
   const [docTypeOverride, setDocTypeOverride] = useState('');
   const [dryRunResult, setDryRunResult] = useState(null);
 
-  useEffect(() => {
-    if (documentId) {
-      loadDebugHistory();
-    }
-  }, [documentId]);
-
-  const loadDebugHistory = async () => {
+  const loadDebugHistory = useCallback(async () => {
     try {
       const response = await apiService.getDebugHistory(documentId);
       setDebugHistory(response.data);
     } catch (err) {
       console.error('Failed to load debug history:', err);
     }
-  };
+  }, [documentId]);
+
+  useEffect(() => {
+    if (documentId) {
+      loadDebugHistory();
+    }
+  }, [documentId, loadDebugHistory]);
 
   const runDebugAnalysis = async (stage, debugType) => {
     setLoading(true);
@@ -203,7 +203,6 @@ const DebugPanel = ({ documentId, currentStage, documentData }) => {
                   <option value="INVOICE">INVOICE</option>
                   <option value="RECEIPT">RECEIPT</option>
                   <option value="ENTRY_EXIT_LOG">ENTRY_EXIT_LOG</option>
-                  <option value="UNKNOWN">UNKNOWN</option>
                 </select>
                 <button onClick={runDryRun} className="btn btn-primary" disabled={loading}>
                   Run Dry-Run

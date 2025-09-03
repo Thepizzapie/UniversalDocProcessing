@@ -139,6 +139,7 @@ def create_app() -> FastAPI:
         ai_health,
         auth,
         config,
+        custom_pipelines,
         debug,
         document_types,
         fetch,
@@ -150,6 +151,7 @@ def create_app() -> FastAPI:
         reports,
         tenants,
         custom_doc_types,
+        test_endpoints,
     )
 
     app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
@@ -166,6 +168,8 @@ def create_app() -> FastAPI:
     app.include_router(config.router, prefix="/api", tags=["config"])
     app.include_router(tenants.router, prefix="/api", tags=["tenants"])
     app.include_router(custom_doc_types.router, prefix="/api", tags=["custom-doc-types"])
+    app.include_router(custom_pipelines.router, prefix="/api", tags=["custom-pipelines"])
+    app.include_router(test_endpoints.router, prefix="/api", tags=["testing"])
 
     # Add health endpoint to API prefix
     @app.get("/api/health")

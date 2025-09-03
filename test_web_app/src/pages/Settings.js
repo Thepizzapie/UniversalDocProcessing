@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Save, Key, Bot, Building2 } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Key, Bot, Building2, Activity, RefreshCw, CheckCircle, XCircle, Server, Brain } from 'lucide-react';
 import { apiService } from '../services/api';
 
 const Settings = () => {
@@ -16,6 +16,7 @@ const Settings = () => {
 
   const [showApiKey, setShowApiKey] = useState(false);
   const [tenantId, setTenantId] = useState(localStorage.getItem('tenantId') || '1');
+  const [health, setHealth] = useState({ loading: false, api: null, ai: null, error: '' });
 
   useEffect(() => {
     loadConfig();
@@ -95,6 +96,18 @@ const Settings = () => {
     setMessage('Tenant saved');
   };
 
+  const checkHealth = async () => {
+    setHealth((h) => ({ ...h, loading: true, error: '' }));
+    try {
+      const apiRes = await apiService.healthCheck();
+      let aiRes;
+      try { aiRes = await apiService.aiHealthCheck(); } catch (e) { aiRes = { data: { status: 'unavailable', message: 'AI unavailable' } }; }
+      setHealth({ loading: false, api: apiRes.data, ai: aiRes.data, error: '' });
+    } catch (e) {
+      setHealth({ loading: false, api: null, ai: null, error: 'Failed to check health' });
+    }
+  };
+
 
 
   if (loading) {
@@ -122,7 +135,7 @@ const Settings = () => {
         </div>
       )}
 
-      <div className="space-y-8">
+  <div className="space-y-8">
         {/* Tenant Selection */}
         <div className="card">
           <div className="flex items-center space-x-2 mb-4">
@@ -140,7 +153,7 @@ const Settings = () => {
           </div>
         </div>
 
-        {/* AI Configuration */}
+  {/* AI Configuration */}
         <div className="card">
           <div className="flex items-center space-x-2 mb-4">
             <Bot className="h-5 w-5 text-accent-600 dark:text-accent-400" />
@@ -260,17 +273,45 @@ const Settings = () => {
             </div>
           </div>
         </div>
+        {/* System Health (moved here) */}
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-2">
+              <Activity className="h-5 w-5 text-accent-600 dark:text-accent-400" />
+              <h2 className="text-xl font-semibold text-primary">System Health</h2>
+            </div>
+            <button onClick={checkHealth} className="btn btn-secondary" disabled={health.loading}>
+              <RefreshCw className={`h-4 w-4 mr-2 ${health.loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </div>
+          {health.loading ? (
+            <div className="flex items-center text-secondary"><RefreshCw className="h-4 w-4 animate-spin mr-2"/> Checking...</div>
+          ) : health.error ? (
+            <div className="p-3 status-error rounded">{health.error}</div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 rounded border border-primary-200 dark:border-primary-700">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center"><Server className="h-4 w-4 mr-2"/><span className="font-medium">API</span></div>
+                  {(health.api?.status === 'healthy') ? <CheckCircle className="h-5 w-5 text-green-500"/> : <XCircle className="h-5 w-5 text-red-500"/>}
+                </div>
+                <div className="text-sm text-secondary">{health.api?.message || 'Status: ' + (health.api?.status || 'Unknown')}</div>
+              </div>
+              <div className="p-4 rounded border border-primary-200 dark:border-primary-700">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center"><Brain className="h-4 w-4 mr-2"/><span className="font-medium">AI</span></div>
+                  {(health.ai?.status === 'available') ? <CheckCircle className="h-5 w-5 text-green-500"/> : <XCircle className="h-5 w-5 text-red-500"/>}
+                </div>
+                <div className="text-sm text-secondary">{health.ai?.message || 'Status: ' + (health.ai?.status || 'Unknown')}</div>
+              </div>
+            </div>
+          )}
+        </div>
 
 
 
-
-
-
-
-
-
-
-        {/* Action Buttons */}
+  {/* Action Buttons */}
         <div className="flex justify-between items-center">
           <div className="flex space-x-3">
             <button

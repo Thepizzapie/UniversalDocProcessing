@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Database, Search, Plus, Trash2, Tag, BookOpen } from 'lucide-react';
 import { apiService } from '../services/api';
 
@@ -18,18 +18,18 @@ const RagManager = ({ documentType = 'INVOICE' }) => {
     tags: []
   });
 
-  useEffect(() => {
-    loadRagDocuments();
-  }, [selectedType]);
-
-  const loadRagDocuments = async () => {
+  const loadRagDocuments = useCallback(async () => {
     try {
       const response = await apiService.getRagDocuments(selectedType);
       setRagDocuments(response.data);
     } catch (err) {
       console.error('Failed to load RAG documents:', err);
     }
-  };
+  }, [selectedType]);
+
+  useEffect(() => {
+    loadRagDocuments();
+  }, [selectedType, loadRagDocuments]);
 
   const searchRagDocuments = async () => {
     if (!searchQuery.trim()) return;
@@ -111,15 +111,7 @@ const RagManager = ({ documentType = 'INVOICE' }) => {
     });
   };
 
-  const updateReferenceData = (key, value) => {
-    setNewRagDoc({
-      ...newRagDoc,
-      reference_data: {
-        ...newRagDoc.reference_data,
-        [key]: value
-      }
-    });
-  };
+  // removed unused updateReferenceData
 
   const documentTypeOptions = [
     { value: 'INVOICE', label: 'Invoice' },

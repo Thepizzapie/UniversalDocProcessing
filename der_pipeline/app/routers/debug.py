@@ -10,6 +10,7 @@ from ..schemas import (
 )
 from ..services.debug_service import debug_service
 from ..services.crewai_service import crewai_service
+from ..services.extraction import ExtractionService
 from ..db import get_session_sync
 from ..models import Document
 
@@ -125,3 +126,18 @@ async def dry_run_extraction(document_id: int, request: DebugRunRequest):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Dry-run failed: {str(e)}",
         )
+
+
+@router.post("/force-extract/{document_id}")
+async def force_extract(document_id: int, payload: dict):
+    """Force extraction using a given custom doc type name for this document."""
+    try:
+        name = payload.get("custom_doc_type_name") or payload.get("name")
+        if not name:
+            raise HTTPException(status_code=400, detail="custom_doc_type_name is required")
+        result = ExtractionService.process_document_forced(document_id, name)
+        return {"document_id": document_id, "extracted": result.root}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Forced extraction failed: {str(e)}")

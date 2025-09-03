@@ -30,6 +30,15 @@ def create_doc_type(
     db.refresh(definition)
     return definition
 
+# Non-trailing-slash variants (to avoid 307s)
+@router.post("", response_model=CustomDocTypeDefinition, status_code=status.HTTP_201_CREATED)
+def create_doc_type_no_slash(
+    definition: CustomDocTypeDefinition, 
+    db: Session = Depends(get_db),
+    tenant_id: int = Depends(get_tenant_id)
+):
+    return create_doc_type(definition, db, tenant_id)
+
 
 @router.get("/", response_model=List[CustomDocTypeDefinition])
 def list_doc_types(
@@ -37,6 +46,13 @@ def list_doc_types(
     tenant_id: int = Depends(get_tenant_id)
 ):
     return db.exec(select(CustomDocTypeDefinition).where(CustomDocTypeDefinition.tenant_id == tenant_id)).all()
+
+@router.get("", response_model=List[CustomDocTypeDefinition])
+def list_doc_types_no_slash(
+    db: Session = Depends(get_db),
+    tenant_id: int = Depends(get_tenant_id)
+):
+    return list_doc_types(db, tenant_id)
 
 
 @router.get("/{doc_type_id}", response_model=CustomDocTypeDefinition)
