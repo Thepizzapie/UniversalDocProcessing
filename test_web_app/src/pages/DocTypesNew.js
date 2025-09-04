@@ -68,37 +68,62 @@ const DocTypesPage = () => {
       return simplified;
     };
     
-    // Extract schemas from output_schema if they exist there, otherwise use direct properties
-    let parentSchema = docType.output_schema?.parent_schema || docType.parent_schema || {};
-    let childSchema = docType.output_schema?.child_schema || docType.child_schema || {};
-    
-    // Convert to simplified format
-    parentSchema = convertToSimplifiedFormat(parentSchema);
-    childSchema = convertToSimplifiedFormat(childSchema);
-    
-    console.log('Converted parentSchema:', parentSchema);
-    console.log('Converted childSchema:', childSchema);
-    
-    // Convert docType to form data
-    const formDataUpdate = {
-      name: docType.name,
-      description: docType.description || '',
-      output_schema: {
+    // Determine if stored output_schema is dual (parent/child) or single-flat
+    const os = docType.output_schema || {};
+    const isDual = os && typeof os === 'object' && (Object.prototype.hasOwnProperty.call(os, 'parent_schema') || Object.prototype.hasOwnProperty.call(os, 'child_schema'));
+
+    let formDataUpdate;
+    if (isDual) {
+      // Dual: pull parent/child from output_schema (fallback to top-level legacy fields) and keep combined output_schema
+      const parentRaw = os.parent_schema || docType.parent_schema || {};
+      const childRaw = os.child_schema || docType.child_schema || {};
+      const parentSchema = convertToSimplifiedFormat(parentRaw);
+      const childSchema = convertToSimplifiedFormat(childRaw);
+
+      console.log('Converted parentSchema:', parentSchema);
+      console.log('Converted childSchema:', childSchema);
+
+      formDataUpdate = {
+        name: docType.name,
+        description: docType.description || '',
+        output_schema: {
+          parent_schema: parentSchema,
+          child_schema: childSchema,
+          collection_key: typeof os.collection_key === 'string' && os.collection_key.trim() ? os.collection_key.trim() : 'child_entries'
+        },
         parent_schema: parentSchema,
         child_schema: childSchema,
-        collection_key: 'child_entries'
-      },
-      parent_schema: parentSchema,
-      child_schema: childSchema,
-      instructions: docType.instructions || { prompt: '', extraction_hints: [] },
-      hil_instructions: docType.hil_instructions || {
-        required_review_fields: [],
-        auto_approve_threshold: 0.85,
-        require_manual_review: false
-      },
-      pipeline_config: docType.pipeline_config || DEFAULT_FORM_DATA.pipeline_config,
-      destination_webhook: docType.destination_webhook || ''
-    };
+        package_mode: 'two',
+        instructions: docType.instructions || { prompt: '', extraction_hints: [] },
+        hil_instructions: docType.hil_instructions || {
+          required_review_fields: [],
+          auto_approve_threshold: 0.85,
+          require_manual_review: false
+        },
+        pipeline_config: docType.pipeline_config || DEFAULT_FORM_DATA.pipeline_config,
+        destination_webhook: docType.destination_webhook || ''
+      };
+    } else {
+      // Single-flat: keep output_schema as-is (converted), clear parent/child
+      const flatSchema = convertToSimplifiedFormat(os);
+
+      formDataUpdate = {
+        name: docType.name,
+        description: docType.description || '',
+        output_schema: flatSchema,
+        parent_schema: {},
+        child_schema: {},
+        package_mode: 'single',
+        instructions: docType.instructions || { prompt: '', extraction_hints: [] },
+        hil_instructions: docType.hil_instructions || {
+          required_review_fields: [],
+          auto_approve_threshold: 0.85,
+          require_manual_review: false
+        },
+        pipeline_config: docType.pipeline_config || DEFAULT_FORM_DATA.pipeline_config,
+        destination_webhook: docType.destination_webhook || ''
+      };
+    }
     
     console.log('Final form data update:', formDataUpdate);
     updateFormData(formDataUpdate);

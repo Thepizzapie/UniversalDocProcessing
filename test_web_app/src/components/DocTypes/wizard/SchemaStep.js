@@ -261,8 +261,14 @@ const SchemaStep = ({ formData, onFormDataChange, packageMode = 'single' }) => {
               </div>
             </>
           ) : (
-            // Single Package Mode - One schema editor
-            <>
+            // Single Package Mode - One schema editor with same panel styling as dual
+            <div className="border border-accent-200 dark:border-accent-700 rounded-lg p-4 bg-accent-50 dark:bg-accent-900/20">
+              <div className="flex items-center space-x-2 mb-4">
+                <div className="w-6 h-6 bg-accent-500 rounded-full flex items-center justify-center">
+                  <span className="text-white text-xs font-bold">1</span>
+                </div>
+                <h6 className="font-semibold text-accent-700 dark:text-accent-300">Package - Schema</h6>
+              </div>
               {schemaMode === SCHEMA_MODES.BUILDER ? (
                 <SchemaBuilder
                   fields={schemaFields}
@@ -275,7 +281,7 @@ const SchemaStep = ({ formData, onFormDataChange, packageMode = 'single' }) => {
                   onSchemaChange={handleSchemaChange}
                 />
               )}
-            </>
+            </div>
           )}
         </div>
       </div>

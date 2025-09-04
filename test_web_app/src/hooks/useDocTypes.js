@@ -42,18 +42,80 @@ export const useDocTypes = () => {
     try {
       apiService.setTenantId(tenantId);
 
-      // Prepare the data for saving
-      const saveData = { ...formData };
-      
-      // For dual package mode, ensure output_schema is properly structured
-      if (formData.parent_schema || formData.child_schema) {
-        saveData.output_schema = {
-          parent_schema: formData.parent_schema || {},
-          child_schema: formData.child_schema || {},
-          collection_key: 'child_entries'
-        };
+      // Determine package mode and compose correct output_schema without clobbering single-package
+      const packageMode = formData.package_mode || 'single';
+
+      const hasParent = formData.parent_schema && Object.keys(formData.parent_schema || {}).length > 0;
+      const hasChild = formData.child_schema && Object.keys(formData.child_schema || {}).length > 0;
+      const isDual = packageMode === 'two' || hasParent || hasChild;
+
+      const unifiedOutputSchema = isDual
+        ? {
+            parent_schema: formData.parent_schema || {},
+            child_schema: formData.child_schema || {},
+            collection_key: (formData.output_schema && typeof formData.output_schema.collection_key === 'string' && formData.output_schema.collection_key.trim())
+              ? formData.output_schema.collection_key.trim()
+              : 'child_entries',
+          }
+        : (formData.output_schema || {});
+
+      // Build pipeline_config.objects consistently for single vs dual package
+      const basePipeline = formData.pipeline_config || {};
+      let objects = basePipeline.objects || [];
+      if (isDual) {
+        objects = [
+          {
+            name: 'parent',
+            object_type: 'parent',
+            parent_object_name: null,
+            object_schema: unifiedOutputSchema.parent_schema || {},
+            extraction_instructions: formData.instructions?.prompt || '',
+            hil_config: formData.hil_instructions || {},
+            send_config: {},
+          },
+          {
+            name: (unifiedOutputSchema.collection_key || 'child_entries'),
+            object_type: 'children',
+            parent_object_name: 'parent',
+            object_schema: unifiedOutputSchema.child_schema || {},
+            extraction_instructions: formData.instructions?.prompt || '',
+            hil_config: formData.hil_instructions || {},
+            send_config: {},
+          },
+        ];
+      } else {
+        objects = [
+          {
+            name: 'main_object',
+            object_type: 'standalone',
+            parent_object_name: null,
+            object_schema: unifiedOutputSchema,
+            extraction_instructions: formData.instructions?.prompt || '',
+            hil_config: formData.hil_instructions || {},
+            send_config: {},
+          },
+        ];
       }
-      
+
+      const pipeline_config = {
+        name: basePipeline.name || (isDual ? 'Dual Package Review and Send' : 'Extract & Send'),
+        description: basePipeline.description || basePipeline.name || '',
+        steps: Array.isArray(basePipeline.steps) ? basePipeline.steps : [],
+        objects,
+        parallel_processing: !!basePipeline.parallel_processing,
+        global_config: basePipeline.global_config || {},
+      };
+
+      // Send only the fields allowed by the backend schema
+      const saveData = {
+        name: formData.name,
+        description: formData.description,
+        instructions: formData.instructions || {},
+        output_schema: unifiedOutputSchema,
+        destination_webhook: formData.destination_webhook || undefined,
+        pipeline_config,
+      };
+
       console.log('Saving doc type with data:', saveData);
 
       if (editingId) {
