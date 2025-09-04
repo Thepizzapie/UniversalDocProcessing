@@ -3,11 +3,10 @@
 from fastapi import APIRouter, HTTPException
 
 from ..db import get_session_sync
+from ..enums import PipelineState
 from ..models import Document
 from ..schemas import ReconcileRequest, ReconcileResponse
-from ..enums import PipelineState
 from ..services.reconcile_service import reconcile_document_data
-
 
 router = APIRouter()
 
@@ -20,9 +19,7 @@ async def reconcile_document(document_id: int, request: ReconcileRequest):
     with get_session_sync() as session:
         document = session.get(Document, document_id)
         if not document:
-            raise HTTPException(
-                status_code=404, detail=f"Document {document_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Document {document_id} not found")
 
         if document.state != PipelineState.FETCHED:
             raise HTTPException(
@@ -70,14 +67,10 @@ async def get_reconciliation_results(document_id: int):
     with get_session_sync() as session:
         document = session.get(Document, document_id)
         if not document:
-            raise HTTPException(
-                status_code=404, detail=f"Document {document_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Document {document_id} not found")
 
         if not document.reconciliation_results:
-            raise HTTPException(
-                status_code=404, detail="No reconciliation results found"
-            )
+            raise HTTPException(status_code=404, detail="No reconciliation results found")
 
         # Get latest reconciliation
         latest = max(document.reconciliation_results, key=lambda x: x.created_at)

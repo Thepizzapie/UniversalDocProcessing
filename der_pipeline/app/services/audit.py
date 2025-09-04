@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from sqlalchemy.orm import Session
+from sqlmodel import Session, select
 
 from ..db import get_session_sync
 from ..enums import ActorType, PipelineState
@@ -50,12 +50,12 @@ class AuditService:
     def get_audit_trail(document_id: int) -> list[AuditTrail]:
         """Get complete audit trail for a document."""
         with get_session_sync() as session:
-            return (
-                session.query(AuditTrail)
-                .filter(AuditTrail.document_id == document_id)
+            statement = (
+                select(AuditTrail)
+                .where(AuditTrail.document_id == document_id)
                 .order_by(AuditTrail.timestamp)
-                .all()
             )
+            return list(session.exec(statement).all())
 
 
 def log_audit_event(
@@ -66,6 +66,7 @@ def log_audit_event(
     actor_type: ActorType = ActorType.SYSTEM,
     actor_id: str | None = None,
     payload: dict[str, Any] | None = None,
+    session: Session | None = None,
 ) -> AuditTrail:
     """Convenience function to log audit events."""
     return AuditService.log(
@@ -75,5 +76,6 @@ def log_audit_event(
         to_state=to_state,
         actor_type=actor_type,
         actor_id=actor_id,
-        payload=payload,
+    payload=payload,
+    session=session,
     )

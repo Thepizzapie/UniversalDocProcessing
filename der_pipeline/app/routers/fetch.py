@@ -1,13 +1,12 @@
 """Fetch router - Step 3 of the pipeline."""
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 from ..db import get_session_sync
+from ..enums import PipelineState
 from ..models import Document
 from ..schemas import FetchRequest, FetchResponse
-from ..enums import PipelineState
 from ..services.fetch_service import fetch_comparator_data
-
 
 router = APIRouter()
 
@@ -22,9 +21,7 @@ async def fetch_comparator_data_endpoint(
     with get_session_sync() as session:
         document = session.get(Document, document_id)
         if not document:
-            raise HTTPException(
-                status_code=404, detail=f"Document {document_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Document {document_id} not found")
 
         if document.state not in (
             PipelineState.HIL_CONFIRMED,
@@ -60,9 +57,7 @@ async def get_fetch_status(document_id: int):
     with get_session_sync() as session:
         document = session.get(Document, document_id)
         if not document:
-            raise HTTPException(
-                status_code=404, detail=f"Document {document_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Document {document_id} not found")
 
         return {
             "document_id": document_id,

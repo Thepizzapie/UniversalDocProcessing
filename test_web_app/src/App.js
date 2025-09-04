@@ -1,31 +1,72 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Dashboard from './pages/Dashboard';
 import DocumentUpload from './pages/DocumentUpload';
-import DocumentDetail from './pages/DocumentDetail';
-import SystemHealth from './pages/SystemHealth';
-import RagUpload from './pages/RagUpload';
-import RagManager from './pages/RagManager';
+import DocumentDetailV2 from './pages/DocumentDetailV2';
+import Rag from './pages/Rag';
 import Settings from './pages/Settings';
+import DocTypesNew from './pages/DocTypesNew';
+import Landing from './pages/Landing';
 
 function App() {
-  return (
-    <Router>
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
+  const [darkMode, setDarkMode] = useState(() => {
+    // Check localStorage for saved theme preference
+    const saved = localStorage.getItem('darkMode');
+    if (saved !== null) {
+      return JSON.parse(saved);
+    }
+    // Default to system preference
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+
+  useEffect(() => {
+    // Apply dark mode class to document
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    
+    // Save preference to localStorage
+    localStorage.setItem('darkMode', JSON.stringify(darkMode));
+  }, [darkMode]);
+
+  const toggleDarkMode = () => {
+    setDarkMode(!darkMode);
+  };
+
+  const AppShell = () => {
+    const location = useLocation();
+    const hideNavbar = location.pathname === '/';
+    return (
+      <div className="min-h-screen bg-primary transition-colors">
+        {!hideNavbar && (
+          <Navbar darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
+        )}
         <main className="container mx-auto px-4 py-8">
           <Routes>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<Landing />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/upload" element={<DocumentUpload />} />
-            <Route path="/document/:id" element={<DocumentDetail />} />
-            <Route path="/health" element={<SystemHealth />} />
+              <Route path="/document/:id" element={<DocumentDetailV2 />} />
+            <Route path="/document-v2/:id" element={<DocumentDetailV2 />} />
+              {/* Keep /document-v2 for back-compat if needed */}
             <Route path="/settings" element={<Settings />} />
-            <Route path="/rag-upload" element={<RagUpload />} />
-            <Route path="/rag-manager" element={<RagManager />} />
+            <Route path="/doc-types" element={<DocTypesNew />} />
+            <Route path="/rag" element={<Rag />} />
+            {/* Back-compat for old links */}
+            <Route path="/rag-upload" element={<Rag />} />
+            <Route path="/rag-manager" element={<Rag />} />
           </Routes>
         </main>
       </div>
+    );
+  };
+
+  return (
+    <Router>
+      <AppShell />
     </Router>
   );
 }

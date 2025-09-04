@@ -1,7 +1,7 @@
 """Human-in-the-Loop service - Step 2 of the pipeline."""
 
 from ..db import get_session_sync
-from ..enums import PipelineState
+from ..enums import ActorType, PipelineState
 from ..models import Document, HilCorrection
 from ..schemas import CorrectedRecord
 from .audit import log_audit_event
@@ -22,16 +22,12 @@ class HilService:
             # Get latest extraction
             latest_extraction = None
             if document.extractions:
-                latest_extraction = max(
-                    document.extractions, key=lambda x: x.created_at
-                )
+                latest_extraction = max(document.extractions, key=lambda x: x.created_at)
 
             # Get latest correction
             latest_correction = None
             if document.hil_corrections:
-                latest_correction = max(
-                    document.hil_corrections, key=lambda x: x.timestamp
-                )
+                latest_correction = max(document.hil_corrections, key=lambda x: x.timestamp)
 
             return {
                 "document": document,
@@ -82,7 +78,9 @@ class HilService:
             # Log audit event
             log_audit_event(
                 document_id=document_id,
+                actor_type=ActorType.USER,
                 action="hil_corrections_applied",
+                actor_id=reviewer,
                 from_state=old_state,
                 to_state=PipelineState.HIL_CONFIRMED,
                 payload={
@@ -90,6 +88,7 @@ class HilService:
                     "reviewer": reviewer,
                     "fields_corrected": len(corrections.root),
                 },
+                session=session,
             )
 
         return correction

@@ -1,7 +1,7 @@
 """Validation utilities for document processing."""
 
-from typing import Any
 from datetime import datetime
+from typing import Any
 
 
 def validate_document_content(content: str, mime_type: str) -> bool:
@@ -21,7 +21,31 @@ def validate_document_content(content: str, mime_type: str) -> bool:
 
     elif mime_type == "application/pdf":
         # PDF validation - should contain PDF header
-        return content.startswith("%PDF-") or b"%PDF-" in content.encode("latin1")
+        # Handle both raw PDF and base64 encoded PDF
+        print(f"DEBUG: Validating PDF content, length: {len(content)}")
+        if content.startswith("%PDF-"):
+            # Raw PDF content
+            print("DEBUG: Found raw PDF header")
+            return True
+        elif len(content) > 100:  # Minimum reasonable base64 length
+            try:
+                # Try to decode as base64 and check for PDF header
+                import base64
+                decoded = base64.b64decode(content)
+                print(f"DEBUG: Decoded base64 content length: {len(decoded)}")
+                if decoded.startswith(b"%PDF-"):
+                    print("DEBUG: Found PDF header in decoded base64")
+                    return True
+                else:
+                    print(f"DEBUG: No PDF header found. Content starts with: {decoded[:20] if decoded else 'empty'}")
+                    return False
+            except Exception as e:
+                # If base64 decode fails, it's not valid
+                print(f"DEBUG: Base64 decode failed: {e}")
+                return False
+        else:
+            print(f"DEBUG: Content too short for PDF validation: {len(content)}")
+        return False
 
     elif mime_type.startswith("text/"):
         # Text files should have reasonable content
@@ -39,7 +63,7 @@ def validate_extracted_fields(fields: dict[str, Any]) -> dict[str, list[str]]:
     # Common field validations
     if "amount" in fields:
         amount = fields["amount"]
-        if isinstance(amount, (int, float)):
+        if isinstance(amount, int | float):
             if amount < 0:
                 errors["amount"] = ["Amount cannot be negative"]
             elif amount > 999999.99:  # Reasonable upper limit
@@ -84,12 +108,8 @@ def validate_correction_fields(
             original_value = original_fields[field_name]
 
             # Check for suspicious changes
-            if isinstance(original_value, (int, float)) and isinstance(
-                corrected_value, (int, float)
-            ):
-                if (
-                    abs(corrected_value - original_value) / abs(original_value) > 1.0
-                ):  # 100% change
+            if isinstance(original_value, int | float) and isinstance(corrected_value, int | float):
+                if abs(corrected_value - original_value) / abs(original_value) > 1.0:  # 100% change
                     errors.setdefault(field_name, []).append(
                         "Correction represents >100% change from original"
                     )
