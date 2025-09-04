@@ -197,15 +197,7 @@ export const apiService = {
   debugPipelinePerformance: (documentId, data) => api.post(`/debug/performance/${documentId}`, data),
   getDebugHistory: (documentId) => api.get(`/debug/history/${documentId}`),
 
-  // Document Types API (Legacy)
-  getDocTypeTemplates: () => api.get('/doc-types/templates'),
-  getDocTypes: () => api.get('/doc-types'),
-  createDocType: (data) => api.post('/doc-types', data),
-  updateDocType: (id, data) => api.put(`/doc-types/${id}`, data),
-  deleteDocType: (id) => api.delete(`/doc-types/${id}`),
-  testDocTypeExtraction: (docTypeId, testData) => api.post(`/doc-types/${docTypeId}/test`, testData),
-
-  // Custom Pipeline API (New)
+    // Custom Pipeline API
   getPipelineTemplates: () => api.get('/custom-pipelines/templates'),
   getCustomDocTypes: () => api.get('/custom-pipelines/doc-types'),
   createCustomDocType: (data) => api.post('/custom-pipelines/doc-types', data),

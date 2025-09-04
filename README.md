@@ -74,7 +74,17 @@ export OPENAI_API_KEY="your-api-key-here"
 export LLM_MODEL="gpt-4o"  # or gpt-4o-mini for cost optimization
 
 # 3. Start Backend
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
+# Windows users: Use the stable startup script (recommended)
+python start_stable.py
+
+# Or use development mode (may have issues on Windows)
+python start_dev.py
+
+# Alternative: Direct command
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+
+# Linux/Mac: Traditional command
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 # 4. Frontend Setup (separate terminal)
 cd test_web_app
@@ -82,11 +92,13 @@ npm install
 npm start
 ```
 
+> 📖 **Windows Troubleshooting**: See [Backend Startup Guide](der_pipeline/README_STARTUP.md) for detailed troubleshooting and startup options.
+
 ### 🌐 Access Points
 - **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:8080
-- **API Documentation**: http://localhost:8080/docs
-- **Health Check**: http://localhost:8080/health
+- **Backend API**: http://127.0.0.1:8000 (Windows) / http://localhost:8000 (Linux/Mac)
+- **API Documentation**: http://127.0.0.1:8000/docs
+- **Health Check**: http://127.0.0.1:8000/health
 
 ### 🔧 Configuration
 Configure via web UI at `/settings` or environment variables:

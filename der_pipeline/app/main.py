@@ -136,40 +136,32 @@ def create_app() -> FastAPI:
 
     # Import and include routers
     from .routers import (
-        ai_health,
-        auth,
-        config,
-        custom_pipelines,
-        debug,
-        document_types,
-        fetch,
-        finalize,
-        hil,
-        ingest,
-        rag,
-        reconcile,
-        reports,
-        tenants,
-        custom_doc_types,
-        test_endpoints,
+        ai_health_router,
+        auth_router,
+        custom_pipelines_router,
+        debug_router,
+        document_types_router,
+        fetch_router,
+        finalize_router,
+        hil_router,
+        ingest_router,
+        rag_router,
+        reconcile_router,
+        reports_router,
     )
 
-    app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
-    app.include_router(ingest.router, prefix="/api", tags=["ingest"])
-    app.include_router(hil.router, prefix="/api", tags=["hil"])
-    app.include_router(fetch.router, prefix="/api", tags=["fetch"])
-    app.include_router(reconcile.router, prefix="/api", tags=["reconcile"])
-    app.include_router(finalize.router, prefix="/api", tags=["finalize"])
-    app.include_router(reports.router, prefix="/api", tags=["reports"])
-    app.include_router(ai_health.router, prefix="/api", tags=["ai-health"])
-    app.include_router(rag.router, prefix="/api", tags=["rag"])
-    app.include_router(debug.router, prefix="/api", tags=["debug"])
-    app.include_router(document_types.router, prefix="/api", tags=["document-types"])
-    app.include_router(config.router, prefix="/api", tags=["config"])
-    app.include_router(tenants.router, prefix="/api", tags=["tenants"])
-    app.include_router(custom_doc_types.router, prefix="/api", tags=["custom-doc-types"])
-    app.include_router(custom_pipelines.router, prefix="/api", tags=["custom-pipelines"])
-    app.include_router(test_endpoints.router, prefix="/api", tags=["testing"])
+    app.include_router(auth_router, prefix="/api/auth", tags=["authentication"])
+    app.include_router(ingest_router, prefix="/api", tags=["ingest"])
+    app.include_router(hil_router, prefix="/api", tags=["hil"])
+    app.include_router(fetch_router, prefix="/api", tags=["fetch"])
+    app.include_router(reconcile_router, prefix="/api", tags=["reconcile"])
+    app.include_router(finalize_router, prefix="/api", tags=["finalize"])
+    app.include_router(reports_router, prefix="/api", tags=["reports"])
+    app.include_router(ai_health_router, prefix="/api", tags=["ai-health"])
+    app.include_router(rag_router, prefix="/api", tags=["rag"])
+    app.include_router(debug_router, prefix="/api", tags=["debug"])
+    app.include_router(document_types_router, prefix="/api", tags=["document-types"])
+    app.include_router(custom_pipelines_router, prefix="/api", tags=["custom-pipelines"])
 
     # Add health endpoint to API prefix
     @app.get("/api/health")

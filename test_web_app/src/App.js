@@ -6,7 +6,7 @@ import DocumentUpload from './pages/DocumentUpload';
 import DocumentDetailV2 from './pages/DocumentDetailV2';
 import Rag from './pages/Rag';
 import Settings from './pages/Settings';
-import DocTypes from './pages/DocTypes';
+import DocTypesNew from './pages/DocTypesNew';
 import Landing from './pages/Landing';
 
 function App() {
@@ -53,7 +53,7 @@ function App() {
             <Route path="/document-v2/:id" element={<DocumentDetailV2 />} />
               {/* Keep /document-v2 for back-compat if needed */}
             <Route path="/settings" element={<Settings />} />
-            <Route path="/doc-types" element={<DocTypes />} />
+            <Route path="/doc-types" element={<DocTypesNew />} />
             <Route path="/rag" element={<Rag />} />
             {/* Back-compat for old links */}
             <Route path="/rag-upload" element={<Rag />} />
