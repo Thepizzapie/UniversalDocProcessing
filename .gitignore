@@ -1,15 +1,63 @@
 # Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# .NET
+bin/
+obj/
+*.user
+*.suo
+*.cache
+.vs/
+*.swp
+*.*~
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Node.js / React
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+build/
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
 # Envs & secrets
 .env
+.env.local
+appsettings.json
+appsettings.*.json
+!appsettings.example.json
 
 # DBs
 demo.db
 demo_web/
+*.db
+*.sqlite
 
 # OS
 .DS_Store
 Thumbs.db
+*.tmp
+*.bak
 
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ignore vscode AI rules
+.github/instructions/codacy.instructions.md

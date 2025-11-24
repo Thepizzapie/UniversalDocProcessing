@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2025 The Doc AI Project Contributors
+Copyright (c) 2024-2025 Thepizzapie (Universal Document Processing)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,4 +19,17 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+THIRD-PARTY LICENSES
+
+This software uses the following open-source packages:
+
+- Microsoft.AspNetCore (Apache 2.0)
+- React (MIT)
+- Tailwind CSS (MIT)
+- OpenAI API (Commercial - requires API key)
+
+See individual package licenses for details.
 
