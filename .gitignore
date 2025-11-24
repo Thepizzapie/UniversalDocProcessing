@@ -1,0 +1,74 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# Envs & secrets
+.env
+.env.local
+
+# DBs
+demo.db
+demo_web/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Node.js / React
+web-app/node_modules/
+web-app/dist/
+web-app/build/
+web-app/.vite/
+web-app/.eslintcache
+
+# Docker
+*.tar
+
+# Test files
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Ignore vscode AI rules
+.github/instructions/codacy.instructions.md
