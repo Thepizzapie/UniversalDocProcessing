@@ -65,8 +65,3 @@ Refer to the `document_processing` package for details on how document types and
 ## Open Source
 
 This project is open source under the MIT License. See `LICENSE`.
-
-- Contributing: see `CONTRIBUTING.md`
-- Code of Conduct: see `CODE_OF_CONDUCT.md`
-- Security Policy: see `SECURITY.md`
-- Example environment: see `.env.example`
